@@ -69,6 +69,7 @@ const mapServiceTypeToDisplayName = new Map<string, string>([
     ['openaicompatible', 'OpenAI Compatible'],
     ['azure', 'Azure'],
     ['anthropic', 'Anthropic'],
+    ['cohere', 'Cohere'],
 ]);
 
 function serviceTypeToDisplayName(serviceType: string): string {
@@ -154,6 +155,7 @@ const Bot = (props: Props) => {
                             <SelectionItemOption value='openaicompatible'>{'OpenAI Compatible'}</SelectionItemOption>
                             <SelectionItemOption value='azure'>{'Azure'}</SelectionItemOption>
                             <SelectionItemOption value='anthropic'>{'Anthropic'}</SelectionItemOption>
+                            <SelectionItemOption value='cohere'>{'Cohere'}</SelectionItemOption>
                         </SelectionItem>
                         <ServiceItem
                             service={props.bot.service}
@@ -166,7 +168,7 @@ const Bot = (props: Props) => {
                             value={props.bot.customInstructions}
                             onChange={(e) => props.onChange({...props.bot, customInstructions: e.target.value})}
                         />
-                        {(props.bot.service.type === 'openai' || props.bot.service.type === 'openaicompatible' || props.bot.service.type === 'azure' || props.bot.service.type === 'anthropic') && (
+                        {(props.bot.service.type === 'openai' || props.bot.service.type === 'openaicompatible' || props.bot.service.type === 'azure' || props.bot.service.type === 'anthropic' || props.bot.service.type === 'cohere') && (
                             <>
                                 <BooleanItem
                                     label={
@@ -227,7 +229,8 @@ type ServiceItemProps = {
 const ServiceItem = (props: ServiceItemProps) => {
     const type = props.service.type;
     const intl = useIntl();
-    const isOpenAIType = type === 'openai' || type === 'openaicompatible' || type === 'azure';
+    const isOpenAIType = type === 'openai' || type === 'openaicompatible' || type === 'azure' || type === 'cohere';
+    const isCohere = type === 'cohere';
 
     const getDefaultOutputTokenLimit = () => {
         switch (type) {
@@ -255,11 +258,13 @@ const ServiceItem = (props: ServiceItemProps) => {
             />
             {isOpenAIType && (
                 <>
-                    <TextItem
-                        label={intl.formatMessage({defaultMessage: 'Organization ID'})}
-                        value={props.service.orgId}
-                        onChange={(e) => props.onChange({...props.service, orgId: e.target.value})}
-                    />
+                    {!isCohere && (
+                        <TextItem
+                            label={intl.formatMessage({defaultMessage: 'Organization ID'})}
+                            value={props.service.orgId}
+                            onChange={(e) => props.onChange({...props.service, orgId: e.target.value})}
+                        />
+                    )}
                     <BooleanItem
                         label={intl.formatMessage({defaultMessage: 'Send User ID'})}
                         value={props.service.sendUserId}
