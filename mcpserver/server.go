@@ -47,7 +47,6 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 			logger.Error("Token validation failed at startup - server cannot start", mlog.Err(err))
 			return nil, fmt.Errorf("startup token validation failed: %w", err)
 		}
-		logger.Info("Token validated successfully at startup")
 	}
 
 	// Register all Mattermost tools
@@ -62,7 +61,7 @@ func (s *MattermostMCPServer) validateTokenAtStartup() error {
 	client := model.NewAPIv4Client(s.config.ServerURL)
 	client.SetToken(s.config.PersonalAccessToken)
 
-	s.logger.Info("Validating token at startup", mlog.String("server_url", s.config.ServerURL))
+	s.logger.Debug("Validating token at startup", mlog.String("server_url", s.config.ServerURL))
 
 	// Test the token with a simple GetMe call
 	user, response, err := client.GetMe(context.Background(), "")
@@ -72,25 +71,11 @@ func (s *MattermostMCPServer) validateTokenAtStartup() error {
 				mlog.Int("status_code", response.StatusCode),
 				mlog.String("server_url", s.config.ServerURL),
 				mlog.Err(err))
-
-			// Provide specific error messages based on status code
-			switch response.StatusCode {
-			case 401:
-				return fmt.Errorf("authentication failed (401): invalid or expired personal access token")
-			case 403:
-				return fmt.Errorf("access forbidden (403): token may not have required permissions")
-			case 404:
-				return fmt.Errorf("server not found (404): check server URL '%s'", s.config.ServerURL)
-			case 500, 502, 503, 504:
-				return fmt.Errorf("server error (%d): Mattermost server may be unavailable", response.StatusCode)
-			default:
-				return fmt.Errorf("API call failed (%d): %w", response.StatusCode, err)
-			}
 		}
-		return fmt.Errorf("token validation failed (no response): %w", err)
+		return fmt.Errorf("token validation failed: %w", err)
 	}
 
-	s.logger.Info("Token validation successful",
+	s.logger.Debug("Token validation successful",
 		mlog.String("user_id", user.Id),
 		mlog.String("username", user.Username),
 		mlog.String("email", user.Email))
@@ -283,12 +268,14 @@ func (s *MattermostMCPServer) registerDevTools() {
 	s.mcpServer.AddTool(createPostAsUserTool, s.createToolHandler("create_post_as_user"))
 }
 
-// createToolHandler creates a tool handler that bridges to our existing tool implementation
 func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Get authenticated client
 		client, _, err := s.getAuthenticatedClient(ctx)
 		if err != nil {
+			s.logger.Debug("Tool call failed",
+				mlog.String("tool", toolName),
+				mlog.Err(err))
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
@@ -335,6 +322,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 		// Development tools (only available in dev mode)
 		case "create_user":
 			if !s.config.DevMode {
+				s.logger.Debug("Tool call failed - dev mode required",
+					mlog.String("tool", toolName))
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -348,6 +337,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 			result, err = devToolProvider.createUser(ctxWithUser, client, request.Params.Arguments)
 		case "create_team":
 			if !s.config.DevMode {
+				s.logger.Debug("Tool call failed - dev mode required",
+					mlog.String("tool", toolName))
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -361,6 +352,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 			result, err = devToolProvider.createTeam(ctxWithUser, client, request.Params.Arguments)
 		case "add_user_to_team":
 			if !s.config.DevMode {
+				s.logger.Debug("Tool call failed - dev mode required",
+					mlog.String("tool", toolName))
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -374,6 +367,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 			result, err = devToolProvider.addUserToTeam(ctxWithUser, client, request.Params.Arguments)
 		case "add_user_to_channel":
 			if !s.config.DevMode {
+				s.logger.Debug("Tool call failed - dev mode required",
+					mlog.String("tool", toolName))
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -387,6 +382,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 			result, err = devToolProvider.addUserToChannel(ctxWithUser, client, request.Params.Arguments)
 		case "create_post_as_user":
 			if !s.config.DevMode {
+				s.logger.Debug("Tool call failed - dev mode required",
+					mlog.String("tool", toolName))
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -399,6 +396,8 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 			}
 			result, err = devToolProvider.createPostAsUser(ctxWithUser, request.Params.Arguments)
 		default:
+			s.logger.Debug("Tool call failed - unknown tool",
+				mlog.String("tool", toolName))
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
@@ -411,6 +410,9 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 		}
 
 		if err != nil {
+			s.logger.Debug("Tool call failed - execution error",
+				mlog.String("tool", toolName),
+				mlog.Err(err))
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
@@ -420,6 +422,16 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Co
 				},
 				IsError: true,
 			}, nil
+		}
+
+		// Log successful tool completion
+		isError := result != nil && result.IsError
+		if isError {
+			s.logger.Debug("Tool call completed with error result",
+				mlog.String("tool", toolName))
+		} else {
+			s.logger.Debug("Tool call completed successfully",
+				mlog.String("tool", toolName))
 		}
 
 		// Result is already a *mcp.CallToolResult
