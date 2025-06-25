@@ -37,6 +37,9 @@ type Config struct {
 
 	// HTTP port for http transport
 	HTTPPort int `json:"http_port"`
+
+	// Development mode enables additional tools for setting up test data
+	DevMode bool `json:"dev_mode"`
 }
 
 // AuthenticationProvider handles authentication for MCP requests
@@ -48,26 +51,15 @@ type AuthenticationProvider interface {
 	GetMattermostClient(ctx context.Context, userID string, token string) (*model.Client4, error)
 }
 
-// Tool represents an MCP tool that can be executed (Legacy - used by existing tool provider)
-type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
-}
-
-// ToolResult represents the result of a tool execution (Legacy - used by existing tool provider)
+// ToolResult represents the result of a tool execution
 type ToolResult struct {
 	Content []Content `json:"content"`
 	IsError bool      `json:"isError,omitempty"`
 }
 
-// Content represents content returned by a tool (Legacy - used by existing tool provider)
+// Content represents content returned by a tool
 type Content struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	Data string `json:"data,omitempty"`
 }
-
-// Legacy types and functions - these can be removed once plugin integration is updated
-
-// NOTE: Legacy Mode types removed - operating mode is now determined by the concrete implementation

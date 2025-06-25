@@ -30,6 +30,7 @@ func main() {
 		clientID     = flag.String("oauth-client-id", "", "OAuth client ID (required for OAuth auth)")
 		clientSecret = flag.String("oauth-client-secret", "", "OAuth client secret (required for OAuth auth)")
 		redirectURL  = flag.String("oauth-redirect-url", "", "OAuth redirect URL (required for OAuth auth)")
+		devMode      = flag.Bool("dev", false, "Enable development mode with additional tools for setting up test data")
 		version      = flag.Bool("version", false, "Show version information")
 	)
 	flag.Parse()
@@ -168,6 +169,10 @@ func main() {
 		}
 	}
 
+	if *devMode {
+		logger.Info("development mode enabled", mlog.Bool("dev_mode", *devMode))
+	}
+
 	// Create server configuration
 	config := mcpserver.Config{
 		ServerURL:           *serverURL,
@@ -175,6 +180,7 @@ func main() {
 		RequestTimeout:      defaultTimeout,
 		Transport:           *transport,
 		HTTPPort:            *httpPort,
+		DevMode:             *devMode,
 	}
 
 	// Create authentication provider based on mode

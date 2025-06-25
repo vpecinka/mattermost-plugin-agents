@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,209 +25,6 @@ func NewMattermostToolProvider(authProvider AuthenticationProvider, logger mlog.
 	return &MattermostToolProvider{
 		authProvider: authProvider,
 		logger:       logger,
-	}
-}
-
-// GetTools returns the available MCP tools for Mattermost
-func (p *MattermostToolProvider) GetTools() []Tool {
-	return []Tool{
-		{
-			Name:        "read_post",
-			Description: "Read a specific post and its thread from Mattermost",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"post_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The ID of the post to read",
-					},
-					"include_thread": map[string]interface{}{
-						"type":        "boolean",
-						"description": "Whether to include the entire thread (default: true)",
-					},
-				},
-				"required": []string{"post_id"},
-			},
-		},
-		{
-			Name:        "read_channel",
-			Description: "Read recent posts from a Mattermost channel",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"channel_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The ID of the channel to read from",
-					},
-					"limit": map[string]interface{}{
-						"type":        "integer",
-						"description": "Number of posts to retrieve (default: 20, max: 100)",
-						"minimum":     1,
-						"maximum":     100,
-					},
-					"since": map[string]interface{}{
-						"type":        "string",
-						"description": "Only get posts since this timestamp (ISO 8601 format)",
-					},
-				},
-				"required": []string{"channel_id"},
-			},
-		},
-		{
-			Name:        "search_posts",
-			Description: "Search for posts in Mattermost",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"query": map[string]interface{}{
-						"type":        "string",
-						"description": "The search query",
-					},
-					"team_id": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional team ID to limit search scope",
-					},
-					"channel_id": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional channel ID to limit search to a specific channel",
-					},
-					"limit": map[string]interface{}{
-						"type":        "integer",
-						"description": "Number of results to return (default: 20, max: 100)",
-						"minimum":     1,
-						"maximum":     100,
-					},
-				},
-				"required": []string{"query"},
-			},
-		},
-		{
-			Name:        "create_post",
-			Description: "Create a new post in Mattermost",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"channel_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The ID of the channel to post in",
-					},
-					"message": map[string]interface{}{
-						"type":        "string",
-						"description": "The message content",
-					},
-					"root_id": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional root post ID for replies",
-					},
-					"props": map[string]interface{}{
-						"type":        "object",
-						"description": "Optional post properties",
-					},
-				},
-				"required": []string{"channel_id", "message"},
-			},
-		},
-		{
-			Name:        "create_channel",
-			Description: "Create a new channel in Mattermost",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{
-						"type":        "string",
-						"description": "The channel name (URL-friendly)",
-					},
-					"display_name": map[string]interface{}{
-						"type":        "string",
-						"description": "The channel display name",
-					},
-					"type": map[string]interface{}{
-						"type":        "string",
-						"description": "Channel type: 'O' for public, 'P' for private",
-						"enum":        []string{"O", "P"},
-					},
-					"team_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The team ID where the channel will be created",
-					},
-					"purpose": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional channel purpose",
-					},
-					"header": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional channel header",
-					},
-				},
-				"required": []string{"name", "display_name", "type", "team_id"},
-			},
-		},
-		{
-			Name:        "get_channel_info",
-			Description: "Get information about a channel",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"channel_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The ID of the channel",
-					},
-					"channel_name": map[string]interface{}{
-						"type":        "string",
-						"description": "The name of the channel (if ID not provided)",
-					},
-					"team_id": map[string]interface{}{
-						"type":        "string",
-						"description": "Team ID (required if using channel_name)",
-					},
-				},
-				"anyOf": []map[string]interface{}{
-					{"required": []string{"channel_id"}},
-					{"required": []string{"channel_name", "team_id"}},
-				},
-			},
-		},
-	}
-}
-
-// ExecuteTool executes a specific tool with the given arguments
-func (p *MattermostToolProvider) ExecuteTool(ctx context.Context, toolName string, arguments map[string]interface{}) (*ToolResult, error) {
-	// Get user ID from context
-	userID, ok := ctx.Value(UserIDKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("user ID not found in context")
-	}
-
-	// Get token from context
-	token, tokenOk := ctx.Value(TokenKey).(string)
-	if !tokenOk {
-		// For stdio mode, token might not be in context - use empty string
-		token = ""
-	}
-
-	// Get authenticated client for this user
-	client, err := p.authProvider.GetMattermostClient(ctx, userID, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get authenticated client: %w", err)
-	}
-
-	switch toolName {
-	case "read_post":
-		return p.readPost(ctx, client, arguments)
-	case "read_channel":
-		return p.readChannel(ctx, client, arguments)
-	case "search_posts":
-		return p.searchPosts(ctx, client, arguments)
-	case "create_post":
-		return p.createPost(ctx, client, arguments)
-	case "create_channel":
-		return p.createChannel(ctx, client, arguments)
-	case "get_channel_info":
-		return p.getChannelInfo(ctx, client, arguments)
-	case "get_team_info":
-		return p.getTeamInfo(ctx, client, arguments)
-	default:
-		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
 
@@ -874,4 +672,183 @@ func getTeamTypeString(teamType string) string {
 	default:
 		return "Unknown"
 	}
+}
+
+// searchUsers implements the search_users tool
+func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+	// Extract arguments
+	term, ok := arguments["term"].(string)
+	if !ok {
+		return nil, fmt.Errorf("term is required and must be a string")
+	}
+
+	// Extract optional limit
+	limit := 20
+	if val, exists := arguments["limit"]; exists {
+		if num, ok := val.(float64); ok {
+			limit = int(num)
+		} else if str, ok := val.(string); ok {
+			if parsed, err := strconv.Atoi(str); err == nil {
+				limit = parsed
+			}
+		}
+	}
+
+	// Validate limit
+	if limit > 100 {
+		limit = 100
+	}
+	if limit < 1 {
+		limit = 1
+	}
+
+	// Search for users
+	users, _, err := client.SearchUsers(context.Background(), &model.UserSearch{
+		Term: term,
+	})
+	if err != nil {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("Error searching users: %v", err),
+			}},
+			IsError: true,
+		}, nil
+	}
+
+	// Limit results
+	if len(users) > limit {
+		users = users[:limit]
+	}
+
+	if len(users) == 0 {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("No users found matching term: %s", term),
+			}},
+		}, nil
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Found %d users matching '%s':\n", len(users), term))
+	for i, user := range users {
+		result.WriteString(fmt.Sprintf("  %d. %s (%s) - %s %s <%s>\n",
+			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
+	}
+
+	return &ToolResult{
+		Content: []Content{{
+			Type: "text",
+			Text: result.String(),
+		}},
+	}, nil
+}
+
+// getChannelMembers implements the get_channel_members tool
+func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+	// Extract arguments
+	channelID, ok := arguments["channel_id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("channel_id is required and must be a string")
+	}
+
+	// Get channel members
+	members, _, err := client.GetChannelMembers(context.Background(), channelID, 0, 200, "")
+	if err != nil {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("Error getting channel members: %v", err),
+			}},
+			IsError: true,
+		}, nil
+	}
+
+	if len(members) == 0 {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("No members found in channel %s", channelID),
+			}},
+		}, nil
+	}
+
+	// Get user details for each member
+	var users []*model.User
+	for _, member := range members {
+		user, _, err := client.GetUser(context.Background(), member.UserId, "")
+		if err != nil {
+			continue // Skip users we can't fetch
+		}
+		users = append(users, user)
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Found %d members in channel %s:\n", len(users), channelID))
+	for i, user := range users {
+		result.WriteString(fmt.Sprintf("  %d. %s (%s) - %s %s <%s>\n",
+			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
+	}
+
+	return &ToolResult{
+		Content: []Content{{
+			Type: "text",
+			Text: result.String(),
+		}},
+	}, nil
+}
+
+// getTeamMembers implements the get_team_members tool
+func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+	// Extract arguments
+	teamID, ok := arguments["team_id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("team_id is required and must be a string")
+	}
+
+	// Get team members
+	members, _, err := client.GetTeamMembers(context.Background(), teamID, 0, 200, "")
+	if err != nil {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("Error getting team members: %v", err),
+			}},
+			IsError: true,
+		}, nil
+	}
+
+	if len(members) == 0 {
+		return &ToolResult{
+			Content: []Content{{
+				Type: "text",
+				Text: fmt.Sprintf("No members found in team %s", teamID),
+			}},
+		}, nil
+	}
+
+	// Get user details for each member
+	var users []*model.User
+	for _, member := range members {
+		user, _, err := client.GetUser(context.Background(), member.UserId, "")
+		if err != nil {
+			continue // Skip users we can't fetch
+		}
+		users = append(users, user)
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Found %d members in team %s:\n", len(users), teamID))
+	for i, user := range users {
+		result.WriteString(fmt.Sprintf("  %d. %s (%s) - %s %s <%s>\n",
+			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
+	}
+
+	return &ToolResult{
+		Content: []Content{{
+			Type: "text",
+			Text: result.String(),
+		}},
+	}, nil
 }
