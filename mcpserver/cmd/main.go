@@ -70,6 +70,7 @@ func main() {
 	err = logger.ConfigureTargets(cfg, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to configure logger: %v\n", err)
+		logger.Flush() // Ensure logs are written before exit
 		os.Exit(1)
 	}
 	logger.RedirectStdLog(mlog.LvlStdLog)
@@ -80,6 +81,7 @@ func main() {
 		*serverURL = os.Getenv("MM_SERVER_URL")
 		if *serverURL == "" {
 			logger.Error("server URL is required (use -server-url or MM_SERVER_URL environment variable)")
+			logger.Flush() // Ensure logs are written before exit
 			os.Exit(1)
 		}
 	}
@@ -90,6 +92,7 @@ func main() {
 	}
 	if *token == "" {
 		logger.Error("personal access token is required (use -token or MM_ACCESS_TOKEN environment variable)")
+		logger.Flush() // Ensure logs are written before exit
 		os.Exit(1)
 	}
 
@@ -119,12 +122,14 @@ func main() {
 	mcpServer, err := mcpserver.NewMattermostMCPServer(config, authProvider, logger)
 	if err != nil {
 		logger.Error("failed to create MCP server", mlog.Err(err))
+		logger.Flush() // Ensure logs are written before exit
 		os.Exit(1)
 	}
 
 	// Start the MCP server
 	if err := mcpServer.Serve(); err != nil {
 		logger.Error("server error", mlog.Err(err))
+		logger.Flush() // Ensure logs are written before exit
 		os.Exit(1)
 	}
 }

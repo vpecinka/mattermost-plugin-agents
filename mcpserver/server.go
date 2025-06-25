@@ -44,7 +44,6 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 	// For standalone mode (stdio with PAT), validate token at startup
 	if (config.Transport == "stdio" || config.Transport == "") && config.PersonalAccessToken != "" {
 		if err := mattermostServer.validateTokenAtStartup(); err != nil {
-			logger.Error("Token validation failed at startup - server cannot start", mlog.Err(err))
 			return nil, fmt.Errorf("startup token validation failed: %w", err)
 		}
 	}
