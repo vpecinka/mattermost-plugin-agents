@@ -32,11 +32,8 @@ type Config struct {
 	// Timeout for requests to Mattermost
 	RequestTimeout time.Duration `json:"request_timeout"`
 
-	// Transport type (stdio, http)
+	// Transport type (currently only stdio is supported)
 	Transport string `json:"transport"`
-
-	// HTTP port for http transport
-	HTTPPort int `json:"http_port"`
 
 	// Development mode enables additional tools for setting up test data
 	DevMode bool `json:"dev_mode"`
