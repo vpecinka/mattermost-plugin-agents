@@ -192,7 +192,11 @@ func main() {
 	}
 
 	// Create Mattermost MCP server with abstracted interface
-	mcpServer := mcpserver.NewMattermostMCPServer(config, authProvider, logger)
+	mcpServer, err := mcpserver.NewMattermostMCPServer(config, authProvider, logger)
+	if err != nil {
+		logger.Error("failed to create MCP server", mlog.Err(err))
+		os.Exit(1)
+	}
 
 	if *debug {
 		logger.Info("starting mcp server", mlog.String("transport", *transport))

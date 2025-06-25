@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
@@ -28,7 +29,7 @@ func NewDevToolProvider(authProvider AuthenticationProvider, logger mlog.LoggerI
 }
 
 // createUser implements the create_user development tool
-func (p *DevToolProvider) createUser(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *DevToolProvider) createUser(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract required arguments
 	username, ok := arguments["username"].(string)
 	if !ok {
@@ -80,25 +81,28 @@ func (p *DevToolProvider) createUser(ctx context.Context, client *model.Client4,
 	// Create the user
 	createdUser, _, err := client.CreateUser(context.Background(), user)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error creating user: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error creating user: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("User created successfully! ID: %s, Username: %s, Email: %s", createdUser.Id, createdUser.Username, createdUser.Email),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("User created successfully! ID: %s, Username: %s, Email: %s", createdUser.Id, createdUser.Username, createdUser.Email),
+			}},
 	}, nil
 }
 
 // createTeam implements the create_team development tool
-func (p *DevToolProvider) createTeam(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *DevToolProvider) createTeam(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract required arguments
 	name, ok := arguments["name"].(string)
 	if !ok {
@@ -139,25 +143,28 @@ func (p *DevToolProvider) createTeam(ctx context.Context, client *model.Client4,
 	// Create the team
 	createdTeam, _, err := client.CreateTeam(context.Background(), team)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error creating team: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error creating team: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("Team created successfully! ID: %s, Name: %s, Display Name: %s", createdTeam.Id, createdTeam.Name, createdTeam.DisplayName),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("Team created successfully! ID: %s, Name: %s, Display Name: %s", createdTeam.Id, createdTeam.Name, createdTeam.DisplayName),
+			}},
 	}, nil
 }
 
 // addUserToTeam implements the add_user_to_team development tool
-func (p *DevToolProvider) addUserToTeam(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *DevToolProvider) addUserToTeam(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	userID, ok := arguments["user_id"].(string)
 	if !ok {
@@ -172,25 +179,28 @@ func (p *DevToolProvider) addUserToTeam(ctx context.Context, client *model.Clien
 	// Add user to team
 	_, _, err := client.AddTeamMember(context.Background(), teamID, userID)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error adding user to team: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error adding user to team: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("User %s successfully added to team %s", userID, teamID),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("User %s successfully added to team %s", userID, teamID),
+			}},
 	}, nil
 }
 
 // addUserToChannel implements the add_user_to_channel development tool
-func (p *DevToolProvider) addUserToChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *DevToolProvider) addUserToChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	userID, ok := arguments["user_id"].(string)
 	if !ok {
@@ -205,25 +215,28 @@ func (p *DevToolProvider) addUserToChannel(ctx context.Context, client *model.Cl
 	// Add user to channel
 	_, _, err := client.AddChannelMember(context.Background(), channelID, userID)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error adding user to channel: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error adding user to channel: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("User %s successfully added to channel %s", userID, channelID),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("User %s successfully added to channel %s", userID, channelID),
+			}},
 	}, nil
 }
 
 // createPostAsUser implements the create_post_as_user development tool
-func (p *DevToolProvider) createPostAsUser(ctx context.Context, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *DevToolProvider) createPostAsUser(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract required arguments
 	username, ok := arguments["username"].(string)
 	if !ok {
@@ -267,11 +280,13 @@ func (p *DevToolProvider) createPostAsUser(ctx context.Context, arguments map[st
 	// Login with username/password
 	_, _, err := client.Login(ctx, username, password)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error logging in as user %s: %v. Check that username and password are correct.", username, err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error logging in as user %s: %v. Check that username and password are correct.", username, err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -285,19 +300,22 @@ func (p *DevToolProvider) createPostAsUser(ctx context.Context, arguments map[st
 
 	createdPost, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error creating post as user: %v. Check that the user has permission to post in this channel and that the channel_id is correct.", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error creating post as user: %v. Check that the user has permission to post in this channel and that the channel_id is correct.", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("Post created successfully as user! Post ID: %s, Channel: %s", createdPost.Id, createdPost.ChannelId),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("Post created successfully as user! Post ID: %s, Channel: %s", createdPost.Id, createdPost.ChannelId),
+			}},
 	}, nil
 }

@@ -50,16 +50,3 @@ type AuthenticationProvider interface {
 	// GetMattermostClient returns an authenticated Mattermost client for a user
 	GetMattermostClient(ctx context.Context, userID string, token string) (*model.Client4, error)
 }
-
-// ToolResult represents the result of a tool execution
-type ToolResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
-}
-
-// Content represents content returned by a tool
-type Content struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
-	Data string `json:"data,omitempty"`
-}

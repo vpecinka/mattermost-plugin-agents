@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
@@ -29,7 +30,7 @@ func NewMattermostToolProvider(authProvider AuthenticationProvider, logger mlog.
 }
 
 // readPost implements the read_post tool
-func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	postID, ok := arguments["post_id"].(string)
 	if !ok {
@@ -50,11 +51,13 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 	if includeThread {
 		postList, _, err := client.GetPostThread(context.Background(), postID, "", false)
 		if err != nil {
-			return &ToolResult{
-				Content: []Content{{
-					Type: "text",
-					Text: fmt.Sprintf("Error reading post thread: %v", err),
-				}},
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: fmt.Sprintf("Error reading post thread: %v", err),
+					},
+				},
 				IsError: true,
 			}, nil
 		}
@@ -64,11 +67,13 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 	} else {
 		post, _, err := client.GetPost(context.Background(), postID, "")
 		if err != nil {
-			return &ToolResult{
-				Content: []Content{{
-					Type: "text",
-					Text: fmt.Sprintf("Error reading post: %v", err),
-				}},
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: fmt.Sprintf("Error reading post: %v", err),
+					},
+				},
 				IsError: true,
 			}, nil
 		}
@@ -108,16 +113,17 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 		result.WriteString("\n\n---\n\n")
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }
 
 // readChannel implements the read_channel tool
-func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	channelID, ok := arguments["channel_id"].(string)
 	if !ok {
@@ -139,11 +145,13 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 	// Get channel info
 	channel, _, err := client.GetChannel(context.Background(), channelID, "")
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting channel: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error getting channel: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -156,11 +164,13 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 			// Parse ISO 8601 timestamp
 			sinceTime, parseErr := time.Parse(time.RFC3339, since)
 			if parseErr != nil {
-				return &ToolResult{
-					Content: []Content{{
-						Type: "text",
-						Text: fmt.Sprintf("Error parsing since timestamp: %v", parseErr),
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: fmt.Sprintf("Error parsing since timestamp: %v", parseErr),
+						},
+					},
 					IsError: true,
 				}, nil
 			}
@@ -177,11 +187,13 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 	}
 
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting posts: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error getting posts: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -212,16 +224,17 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 		result.WriteString("\n\n---\n\n")
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }
 
 // searchPosts implements the search_posts tool
-func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	query, ok := arguments["query"].(string)
 	if !ok {
@@ -241,11 +254,13 @@ func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.
 	}
 	postList, _, err := client.SearchPostsWithParams(context.Background(), teamID, searchParams)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error searching posts: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error searching posts: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -296,16 +311,17 @@ func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.
 		result.WriteString("\n\n---\n\n")
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }
 
 // createPost implements the create_post tool
-func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	channelID, ok := arguments["channel_id"].(string)
 	if !ok {
@@ -317,18 +333,9 @@ func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.C
 		return nil, fmt.Errorf("message is required and must be a string")
 	}
 
-	// client is already *model.Client4 from function signature
-
-	// Get user ID from context
-	userID, ok := ctx.Value(UserIDKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("user ID not found in context")
-	}
-
-	// Create post
+	// Create post (Mattermost will set UserId from session automatically)
 	post := &model.Post{
 		ChannelId: channelID,
-		UserId:    userID,
 		Message:   message,
 	}
 
@@ -348,11 +355,13 @@ func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.C
 
 	_, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error creating post: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error creating post: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -364,16 +373,17 @@ func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.C
 		channelName = channel.DisplayName
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("Post created successfully in channel '%s'", channelName),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("Post created successfully in channel '%s'", channelName),
+			}},
 	}, nil
 }
 
 // createChannel implements the create_channel tool
-func (p *MattermostToolProvider) createChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) createChannel(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	name, ok := arguments["name"].(string)
 	if !ok {
@@ -395,21 +405,12 @@ func (p *MattermostToolProvider) createChannel(ctx context.Context, client *mode
 		return nil, fmt.Errorf("team_id is required and must be a string")
 	}
 
-	// client is already *model.Client4 from function signature
-
-	// Get user ID from context
-	userID, ok := ctx.Value(UserIDKey).(string)
-	if !ok {
-		return nil, fmt.Errorf("user ID not found in context")
-	}
-
-	// Create channel
+	// Create channel (Mattermost will set CreatorId from session automatically)
 	channel := &model.Channel{
 		Name:        name,
 		DisplayName: displayName,
 		Type:        model.ChannelType(channelType),
 		TeamId:      teamID,
-		CreatorId:   userID,
 	}
 
 	// Set optional fields
@@ -427,55 +428,111 @@ func (p *MattermostToolProvider) createChannel(ctx context.Context, client *mode
 
 	createdChannel, _, err := client.CreateChannel(context.Background(), channel)
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error creating channel: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error creating channel: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: fmt.Sprintf("Channel '%s' (ID: %s) created successfully", createdChannel.DisplayName, createdChannel.Id),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf("Channel '%s' (ID: %s) created successfully", createdChannel.DisplayName, createdChannel.Id),
+			}},
 	}, nil
 }
 
 // getChannelInfo implements the get_channel_info tool
-func (p *MattermostToolProvider) getChannelInfo(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
-	// client is already *model.Client4 from function signature
+func (p *MattermostToolProvider) getChannelInfo(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	var channel *model.Channel
 	var err error
 
-	// Get channel by ID or name
-	if channelID, exists := arguments["channel_id"]; exists {
-		if id, ok := channelID.(string); ok {
-			channel, _, err = client.GetChannel(context.Background(), id, "")
-		}
-	} else if channelName, exists := arguments["channel_name"]; exists {
-		if name, ok := channelName.(string); ok {
-			teamID, teamExists := arguments["team_id"].(string)
-			if !teamExists {
-				return nil, fmt.Errorf("team_id is required when using channel_name")
-			}
-			channel, _, err = client.GetChannelByName(context.Background(), name, teamID, "")
-		}
-	} else {
-		return nil, fmt.Errorf("either channel_id or channel_name must be provided")
+	// Smart channel lookup strategy:
+	// 1. If channel_id provided, use it directly (fastest)
+	// 2. If channel_display_name provided, search by display name
+	// 3. If channel_name provided, use it directly
+
+	var lookupErrors []string
+
+	// Require team_id for name/display_name lookups
+	teamID, teamExists := arguments["team_id"].(string)
+	needsTeamID := (arguments["channel_display_name"] != nil && arguments["channel_display_name"].(string) != "") ||
+		(arguments["channel_name"] != nil && arguments["channel_name"].(string) != "")
+
+	if needsTeamID && !teamExists {
+		return nil, fmt.Errorf("team_id is required when using channel_name or channel_display_name")
 	}
 
-	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting channel: %v", err),
-			}},
+	// Try direct ID lookup first if provided
+	if channelID, exists := arguments["channel_id"]; exists {
+		if id, ok := channelID.(string); ok && id != "" {
+			channel, _, err = client.GetChannel(context.Background(), id, "")
+			if err == nil {
+				// Success with ID lookup
+				goto channelFound
+			}
+			lookupErrors = append(lookupErrors, fmt.Sprintf("ID lookup failed: %v", err))
+		}
+	}
+
+	// Try display name search if provided (user-friendly)
+	if channelDisplayName, exists := arguments["channel_display_name"]; exists {
+		if displayName, ok := channelDisplayName.(string); ok && displayName != "" {
+			// Search for channels by display name using SearchChannels
+			searchRequest := &model.ChannelSearch{
+				Term: displayName,
+			}
+
+			if channels, _, searchErr := client.SearchChannels(context.Background(), teamID, searchRequest); searchErr == nil {
+				// Find exact match for display name (case-insensitive)
+				for _, c := range channels {
+					if strings.EqualFold(c.DisplayName, displayName) {
+						channel = c
+						goto channelFound
+					}
+				}
+				lookupErrors = append(lookupErrors, fmt.Sprintf("no exact match found for display name '%s'", displayName))
+			} else {
+				lookupErrors = append(lookupErrors, fmt.Sprintf("display name search failed: %v", searchErr))
+			}
+		}
+	}
+
+	// Try direct name lookup if provided
+	if channelName, exists := arguments["channel_name"]; exists {
+		if name, ok := channelName.(string); ok && name != "" {
+			ch, _, nameErr := client.GetChannelByName(context.Background(), name, teamID, "")
+			if nameErr == nil {
+				channel = ch
+				goto channelFound
+			}
+			lookupErrors = append(lookupErrors, fmt.Sprintf("name lookup failed: %v", nameErr))
+		}
+	}
+
+	// If we get here, all lookups failed
+	if len(lookupErrors) > 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Channel not found. Tried: %s", strings.Join(lookupErrors, "; ")),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
+
+	// No valid parameters provided
+	return nil, fmt.Errorf("provide channel_id for direct lookup, or channel_display_name/channel_name + team_id for search")
+
+channelFound:
 
 	// Format channel info
 	channelTypeStr := "Unknown"
@@ -511,123 +568,112 @@ func (p *MattermostToolProvider) getChannelInfo(ctx context.Context, client *mod
 		channel.Header,
 	)
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result,
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result,
+			}},
 	}, nil
 }
 
 // getTeamInfo implements the get_team_info tool
-func (p *MattermostToolProvider) getTeamInfo(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
-	// client is already *model.Client4 from function signature
+func (p *MattermostToolProvider) getTeamInfo(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	var team *model.Team
 	var err error
 
-	// Get team by ID, name, or display name
+	// Smart team lookup strategy:
+	// 1. If team_id provided, use it directly (fastest)
+	// 2. If team_display_name provided, search by display name
+	// 3. If team_name provided, use it directly
+
+	var lookupErrors []string
+
+	// Try direct ID lookup first if provided
 	if teamID, exists := arguments["team_id"]; exists {
 		if id, ok := teamID.(string); ok && id != "" {
 			team, _, err = client.GetTeam(context.Background(), id, "")
+			if err == nil {
+				// Success with ID lookup
+				goto teamFound
+			}
+			lookupErrors = append(lookupErrors, fmt.Sprintf("ID lookup failed: %v", err))
 		}
-	} else if teamName, exists := arguments["team_name"]; exists {
-		if name, ok := teamName.(string); ok && name != "" {
-			team, _, err = client.GetTeamByName(context.Background(), name, "")
-		}
-	} else if teamDisplayName, exists := arguments["team_display_name"]; exists {
+	}
+
+	// Try display name search if provided (user-friendly)
+	if teamDisplayName, exists := arguments["team_display_name"]; exists {
 		if displayName, ok := teamDisplayName.(string); ok && displayName != "" {
-			// Use SearchTeams to find team by display name
+			// Search for teams by display name using SearchTeams
 			searchRequest := &model.TeamSearch{
 				Term: displayName,
 			}
 
-			teams, _, searchErr := client.SearchTeams(context.Background(), searchRequest)
-			if searchErr != nil {
-				return &ToolResult{
-					Content: []Content{{
-						Type: "text",
-						Text: fmt.Sprintf("Error searching teams: %v", searchErr),
-					}},
-					IsError: true,
-				}, nil
-			}
-
-			// Find exact match for display name (case-insensitive)
-			for _, t := range teams {
-				if strings.EqualFold(t.DisplayName, displayName) {
-					team = t
-					break
+			if teams, _, searchErr := client.SearchTeams(context.Background(), searchRequest); searchErr == nil {
+				// Find exact match for display name (case-insensitive)
+				for _, t := range teams {
+					if strings.EqualFold(t.DisplayName, displayName) {
+						team = t
+						goto teamFound
+					}
 				}
-			}
-
-			// If no exact match, check if we found any partial matches
-			if team == nil {
-				if len(teams) > 0 {
-					// Return the first match with a note about partial matching
-					team = teams[0]
-					result := fmt.Sprintf(`## Team Information (Partial Match)
-
-**Note:** No exact match found for "%s". Showing closest match:
-
-**Name:** %s
-**Display Name:** %s
-**ID:** %s
-**Type:** %s
-**Description:** %s
-**Created:** %s
-**Allow Open Invite:** %t
-**Invite ID:** %s
-
-**Other matches found:** %d
-`,
-						displayName,
-						team.Name,
-						team.DisplayName,
-						team.Id,
-						getTeamTypeString(team.Type),
-						team.Description,
-						time.Unix(team.CreateAt/1000, 0).Format("2006-01-02 15:04:05"),
-						team.AllowOpenInvite,
-						team.InviteId,
-						len(teams),
-					)
-
-					return &ToolResult{
-						Content: []Content{{
-							Type: "text",
-							Text: result,
-						}},
-					}, nil
-				}
-				return &ToolResult{
-					Content: []Content{{
-						Type: "text",
-						Text: fmt.Sprintf("No teams found matching '%s'", displayName),
-					}},
-					IsError: true,
-				}, nil
+				lookupErrors = append(lookupErrors, fmt.Sprintf("no exact match found for display name '%s'", displayName))
+			} else {
+				lookupErrors = append(lookupErrors, fmt.Sprintf("display name search failed: %v", searchErr))
 			}
 		}
-	} else {
-		return nil, fmt.Errorf("either team_id, team_name, or team_display_name must be provided")
 	}
 
+	// Try direct name lookup if provided
+	if teamName, exists := arguments["team_name"]; exists {
+		if name, ok := teamName.(string); ok && name != "" {
+			t, _, nameErr := client.GetTeamByName(context.Background(), name, "")
+			if nameErr == nil {
+				team = t
+				goto teamFound
+			}
+			lookupErrors = append(lookupErrors, fmt.Sprintf("name lookup failed: %v", nameErr))
+		}
+	}
+
+	// If we get here, all lookups failed
+	if len(lookupErrors) > 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Team not found. Tried: %s", strings.Join(lookupErrors, "; ")),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+
+	// No valid parameters provided
+	return nil, fmt.Errorf("provide team_id for direct lookup, or team_display_name/team_name for search")
+
+teamFound:
+
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting team: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error getting team: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
 	if team == nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: "Team not found",
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: "Team not found",
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -654,11 +700,12 @@ func (p *MattermostToolProvider) getTeamInfo(ctx context.Context, client *model.
 		team.InviteId,
 	)
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result,
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result,
+			}},
 	}, nil
 }
 
@@ -675,7 +722,7 @@ func getTeamTypeString(teamType string) string {
 }
 
 // searchUsers implements the search_users tool
-func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	term, ok := arguments["term"].(string)
 	if !ok {
@@ -707,11 +754,13 @@ func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.
 		Term: term,
 	})
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error searching users: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error searching users: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
@@ -722,11 +771,13 @@ func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.
 	}
 
 	if len(users) == 0 {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("No users found matching term: %s", term),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("No users found matching term: %s", term),
+				},
+			},
 		}, nil
 	}
 
@@ -737,16 +788,17 @@ func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.
 			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }
 
 // getChannelMembers implements the get_channel_members tool
-func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	channelID, ok := arguments["channel_id"].(string)
 	if !ok {
@@ -756,21 +808,25 @@ func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *
 	// Get channel members
 	members, _, err := client.GetChannelMembers(context.Background(), channelID, 0, 200, "")
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting channel members: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error getting channel members: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
 	if len(members) == 0 {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("No members found in channel %s", channelID),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("No members found in channel %s", channelID),
+				},
+			},
 		}, nil
 	}
 
@@ -791,16 +847,17 @@ func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *
 			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }
 
 // getTeamMembers implements the get_team_members tool
-func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*ToolResult, error) {
+func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *model.Client4, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	// Extract arguments
 	teamID, ok := arguments["team_id"].(string)
 	if !ok {
@@ -810,21 +867,25 @@ func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *mod
 	// Get team members
 	members, _, err := client.GetTeamMembers(context.Background(), teamID, 0, 200, "")
 	if err != nil {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("Error getting team members: %v", err),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error getting team members: %v", err),
+				},
+			},
 			IsError: true,
 		}, nil
 	}
 
 	if len(members) == 0 {
-		return &ToolResult{
-			Content: []Content{{
-				Type: "text",
-				Text: fmt.Sprintf("No members found in team %s", teamID),
-			}},
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("No members found in team %s", teamID),
+				},
+			},
 		}, nil
 	}
 
@@ -845,10 +906,11 @@ func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *mod
 			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
 	}
 
-	return &ToolResult{
-		Content: []Content{{
-			Type: "text",
-			Text: result.String(),
-		}},
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: result.String(),
+			}},
 	}, nil
 }

@@ -6,7 +6,11 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
@@ -14,39 +18,91 @@ import (
 // MattermostMCPServer provides a high-level interface for creating an MCP server
 // with Mattermost-specific tools and authentication
 type MattermostMCPServer struct {
-	mcpServer    MCPServer
+	mcpServer    *server.MCPServer
 	authProvider AuthenticationProvider
 	logger       mlog.LoggerIFace
 	config       Config
 }
 
 // NewMattermostMCPServer creates a new Mattermost MCP server with the specified configuration
-func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, logger mlog.LoggerIFace) *MattermostMCPServer {
-	// Create the underlying MCP server using our interface
-	mcpServer := NewMCPGoServer(
+func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, logger mlog.LoggerIFace) (*MattermostMCPServer, error) {
+	// Create the mcp-go server directly
+	mcpServer := server.NewMCPServer(
 		"mattermost-mcp-server",
 		"0.1.0",
-		WithMCPLogger(logger),
+		server.WithToolCapabilities(true), // Enable tool list changed notifications
+		server.WithLogging(),              // Enable logging capabilities
 	)
 
-	server := &MattermostMCPServer{
+	mattermostServer := &MattermostMCPServer{
 		mcpServer:    mcpServer,
 		authProvider: authProvider,
 		logger:       logger,
 		config:       config,
 	}
 
-	// Register all Mattermost tools
-	server.registerMattermostTools()
+	// For standalone mode (stdio with PAT), validate token at startup
+	if (config.Transport == "stdio" || config.Transport == "") && config.PersonalAccessToken != "" {
+		if err := mattermostServer.validateTokenAtStartup(); err != nil {
+			logger.Error("Token validation failed at startup - server cannot start", mlog.Err(err))
+			return nil, fmt.Errorf("startup token validation failed: %w", err)
+		}
+		logger.Info("Token validated successfully at startup")
+	}
 
-	return server
+	// Register all Mattermost tools
+	mattermostServer.registerMattermostTools()
+
+	return mattermostServer, nil
+}
+
+// validateTokenAtStartup validates the PAT token during server initialization
+func (s *MattermostMCPServer) validateTokenAtStartup() error {
+	// Create client with the configured token
+	client := model.NewAPIv4Client(s.config.ServerURL)
+	client.SetToken(s.config.PersonalAccessToken)
+
+	s.logger.Info("Validating token at startup", mlog.String("server_url", s.config.ServerURL))
+
+	// Test the token with a simple GetMe call
+	user, response, err := client.GetMe(context.Background(), "")
+	if err != nil {
+		if response != nil {
+			s.logger.Error("GetMe API call failed",
+				mlog.Int("status_code", response.StatusCode),
+				mlog.String("server_url", s.config.ServerURL),
+				mlog.Err(err))
+
+			// Provide specific error messages based on status code
+			switch response.StatusCode {
+			case 401:
+				return fmt.Errorf("authentication failed (401): invalid or expired personal access token")
+			case 403:
+				return fmt.Errorf("access forbidden (403): token may not have required permissions")
+			case 404:
+				return fmt.Errorf("server not found (404): check server URL '%s'", s.config.ServerURL)
+			case 500, 502, 503, 504:
+				return fmt.Errorf("server error (%d): Mattermost server may be unavailable", response.StatusCode)
+			default:
+				return fmt.Errorf("API call failed (%d): %w", response.StatusCode, err)
+			}
+		}
+		return fmt.Errorf("token validation failed (no response): %w", err)
+	}
+
+	s.logger.Info("Token validation successful",
+		mlog.String("user_id", user.Id),
+		mlog.String("username", user.Username),
+		mlog.String("email", user.Email))
+
+	return nil
 }
 
 // Serve starts the server using the configured transport
 func (s *MattermostMCPServer) Serve() error {
 	switch s.config.Transport {
 	case "stdio", "": // default to stdio for backward compatibility
-		return s.mcpServer.ServeStdio()
+		return s.serveStdio()
 	case "http":
 		return s.serveHTTP()
 	default:
@@ -54,9 +110,18 @@ func (s *MattermostMCPServer) Serve() error {
 	}
 }
 
-// ServeStdio starts the server using stdio transport (kept for backward compatibility)
-func (s *MattermostMCPServer) ServeStdio() error {
-	return s.mcpServer.ServeStdio()
+// serveStdio starts the server using stdio transport
+func (s *MattermostMCPServer) serveStdio() error {
+	// Configure error logger to use our mlog logger if available
+	var errorLogger *log.Logger
+	if s.logger != nil {
+		// Create a custom writer that forwards to mlog
+		errorLogger = log.New(&mlogWriter{logger: s.logger}, "", 0)
+	} else {
+		errorLogger = log.New(os.Stderr, "", log.LstdFlags)
+	}
+
+	return server.ServeStdio(s.mcpServer, server.WithErrorLogger(errorLogger))
 }
 
 // serveHTTP starts the server using HTTP transport
@@ -71,246 +136,93 @@ func (s *MattermostMCPServer) serveHTTP() error {
 // registerMattermostTools registers all Mattermost tools with the MCP server
 func (s *MattermostMCPServer) registerMattermostTools() {
 	// Register read_post tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "read_post",
-			Description: "Read a specific post and its thread from Mattermost",
-			Properties: map[string]MCPProperty{
-				"post_id": {
-					Type:        "string",
-					Description: "The ID of the post to read",
-					Required:    true,
-				},
-				"include_thread": {
-					Type:        "boolean",
-					Description: "Whether to include the entire thread (default: true)",
-				},
-			},
-			Required: []string{"post_id"},
-		},
-		s.createToolHandler("read_post"),
+	readPostTool := mcp.NewTool("read_post",
+		mcp.WithDescription("Read a specific post and its thread from Mattermost"),
+		mcp.WithString("post_id", mcp.Description("The ID of the post to read"), mcp.Required()),
+		mcp.WithBoolean("include_thread", mcp.Description("Whether to include the entire thread (default: true)")),
 	)
+	s.mcpServer.AddTool(readPostTool, s.createToolHandler("read_post"))
 
 	// Register read_channel tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "read_channel",
-			Description: "Read recent posts from a Mattermost channel",
-			Properties: map[string]MCPProperty{
-				"channel_id": {
-					Type:        "string",
-					Description: "The ID of the channel to read from",
-					Required:    true,
-				},
-				"limit": {
-					Type:        "number",
-					Description: "Number of posts to retrieve (default: 20, max: 100)",
-				},
-				"since": {
-					Type:        "string",
-					Description: "Only get posts since this timestamp (ISO 8601 format)",
-				},
-			},
-			Required: []string{"channel_id"},
-		},
-		s.createToolHandler("read_channel"),
+	readChannelTool := mcp.NewTool("read_channel",
+		mcp.WithDescription("Read recent posts from a Mattermost channel"),
+		mcp.WithString("channel_id", mcp.Description("The ID of the channel to read from"), mcp.Required()),
+		mcp.WithNumber("limit", mcp.Description("Number of posts to retrieve (default: 20, max: 100)")),
+		mcp.WithString("since", mcp.Description("Only get posts since this timestamp (ISO 8601 format)")),
 	)
+	s.mcpServer.AddTool(readChannelTool, s.createToolHandler("read_channel"))
 
 	// Register search_posts tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "search_posts",
-			Description: "Search for posts in Mattermost",
-			Properties: map[string]MCPProperty{
-				"query": {
-					Type:        "string",
-					Description: "The search query",
-					Required:    true,
-				},
-				"team_id": {
-					Type:        "string",
-					Description: "Optional team ID to limit search scope",
-				},
-				"channel_id": {
-					Type:        "string",
-					Description: "Optional channel ID to limit search to a specific channel",
-				},
-				"limit": {
-					Type:        "number",
-					Description: "Number of results to return (default: 20, max: 100)",
-				},
-			},
-			Required: []string{"query"},
-		},
-		s.createToolHandler("search_posts"),
+	searchPostsTool := mcp.NewTool("search_posts",
+		mcp.WithDescription("Search for posts in Mattermost"),
+		mcp.WithString("query", mcp.Description("The search query"), mcp.Required()),
+		mcp.WithString("team_id", mcp.Description("Optional team ID to limit search scope")),
+		mcp.WithString("channel_id", mcp.Description("Optional channel ID to limit search to a specific channel")),
+		mcp.WithNumber("limit", mcp.Description("Number of results to return (default: 20, max: 100)")),
 	)
+	s.mcpServer.AddTool(searchPostsTool, s.createToolHandler("search_posts"))
 
 	// Register create_post tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "create_post",
-			Description: "Create a new post in Mattermost",
-			Properties: map[string]MCPProperty{
-				"channel_id": {
-					Type:        "string",
-					Description: "The ID of the channel to post in",
-					Required:    true,
-				},
-				"message": {
-					Type:        "string",
-					Description: "The message content",
-					Required:    true,
-				},
-				"root_id": {
-					Type:        "string",
-					Description: "Optional root post ID for replies",
-				},
-			},
-			Required: []string{"channel_id", "message"},
-		},
-		s.createToolHandler("create_post"),
+	createPostTool := mcp.NewTool("create_post",
+		mcp.WithDescription("Create a new post in Mattermost"),
+		mcp.WithString("channel_id", mcp.Description("The ID of the channel to post in"), mcp.Required()),
+		mcp.WithString("message", mcp.Description("The message content"), mcp.Required()),
+		mcp.WithString("root_id", mcp.Description("Optional root post ID for replies")),
 	)
+	s.mcpServer.AddTool(createPostTool, s.createToolHandler("create_post"))
 
 	// Register create_channel tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "create_channel",
-			Description: "Create a new channel in Mattermost",
-			Properties: map[string]MCPProperty{
-				"name": {
-					Type:        "string",
-					Description: "The channel name (URL-friendly)",
-					Required:    true,
-				},
-				"display_name": {
-					Type:        "string",
-					Description: "The channel display name",
-					Required:    true,
-				},
-				"type": {
-					Type:        "string",
-					Description: "Channel type: 'O' for public, 'P' for private",
-					Required:    true,
-				},
-				"team_id": {
-					Type:        "string",
-					Description: "The team ID where the channel will be created",
-					Required:    true,
-				},
-				"purpose": {
-					Type:        "string",
-					Description: "Optional channel purpose",
-				},
-				"header": {
-					Type:        "string",
-					Description: "Optional channel header",
-				},
-			},
-			Required: []string{"name", "display_name", "type", "team_id"},
-		},
-		s.createToolHandler("create_channel"),
+	createChannelTool := mcp.NewTool("create_channel",
+		mcp.WithDescription("Create a new channel in Mattermost"),
+		mcp.WithString("name", mcp.Description("The channel name (URL-friendly)"), mcp.Required()),
+		mcp.WithString("display_name", mcp.Description("The channel display name"), mcp.Required()),
+		mcp.WithString("type", mcp.Description("Channel type: 'O' for public, 'P' for private"), mcp.Required()),
+		mcp.WithString("team_id", mcp.Description("The team ID where the channel will be created"), mcp.Required()),
+		mcp.WithString("purpose", mcp.Description("Optional channel purpose")),
+		mcp.WithString("header", mcp.Description("Optional channel header")),
 	)
+	s.mcpServer.AddTool(createChannelTool, s.createToolHandler("create_channel"))
 
 	// Register get_channel_info tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "get_channel_info",
-			Description: "Get information about a channel",
-			Properties: map[string]MCPProperty{
-				"channel_id": {
-					Type:        "string",
-					Description: "The ID of the channel",
-				},
-				"channel_name": {
-					Type:        "string",
-					Description: "The name of the channel (if ID not provided)",
-				},
-				"team_id": {
-					Type:        "string",
-					Description: "Team ID (required if using channel_name)",
-				},
-			},
-		},
-		s.createToolHandler("get_channel_info"),
+	getChannelInfoTool := mcp.NewTool("get_channel_info",
+		mcp.WithDescription("Get information about a channel. If you have a channel ID, use that for fastest lookup. If the user provides a human-readable name, try channel_display_name first (what users see in the UI), then channel_name (URL name) as fallback."),
+		mcp.WithString("channel_id", mcp.Description("The exact channel ID (fastest, most reliable method)")),
+		mcp.WithString("channel_display_name", mcp.Description("The human-readable display name users see (e.g. 'General Discussion')")),
+		mcp.WithString("channel_name", mcp.Description("The URL-friendly channel name (e.g. 'general-discussion')")),
+		mcp.WithString("team_id", mcp.Description("Team ID (required if using channel_name or channel_display_name)")),
 	)
+	s.mcpServer.AddTool(getChannelInfoTool, s.createToolHandler("get_channel_info"))
 
 	// Register get_team_info tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "get_team_info",
-			Description: "Get information about a team by name or display name",
-			Properties: map[string]MCPProperty{
-				"team_id": {
-					Type:        "string",
-					Description: "The ID of the team",
-				},
-				"team_name": {
-					Type:        "string",
-					Description: "The name (URL name) of the team (if ID not provided)",
-				},
-				"team_display_name": {
-					Type:        "string",
-					Description: "The display name of the team (if ID and name not provided)",
-				},
-			},
-		},
-		s.createToolHandler("get_team_info"),
+	getTeamInfoTool := mcp.NewTool("get_team_info",
+		mcp.WithDescription("Get information about a team. If you have a team ID, use that for fastest lookup. If the user provides a human-readable name, try team_display_name first (what users see in the UI), then team_name (URL name) as fallback."),
+		mcp.WithString("team_id", mcp.Description("The exact team ID (fastest, most reliable method)")),
+		mcp.WithString("team_display_name", mcp.Description("The human-readable display name users see (e.g. 'Engineering Team')")),
+		mcp.WithString("team_name", mcp.Description("The URL-friendly team name (e.g. 'engineering-team')")),
 	)
+	s.mcpServer.AddTool(getTeamInfoTool, s.createToolHandler("get_team_info"))
 
 	// Register search_users tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "search_users",
-			Description: "Search for existing users by username, email, or name",
-			Properties: map[string]MCPProperty{
-				"term": {
-					Type:        "string",
-					Description: "Search term (username, email, first name, or last name)",
-					Required:    true,
-				},
-				"limit": {
-					Type:        "number",
-					Description: "Maximum number of results to return (default: 20, max: 100)",
-				},
-			},
-			Required: []string{"term"},
-		},
-		s.createToolHandler("search_users"),
+	searchUsersTool := mcp.NewTool("search_users",
+		mcp.WithDescription("Search for existing users by username, email, or name"),
+		mcp.WithString("term", mcp.Description("Search term (username, email, first name, or last name)"), mcp.Required()),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of results to return (default: 20, max: 100)")),
 	)
+	s.mcpServer.AddTool(searchUsersTool, s.createToolHandler("search_users"))
 
 	// Register get_channel_members tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "get_channel_members",
-			Description: "Get all members of a channel",
-			Properties: map[string]MCPProperty{
-				"channel_id": {
-					Type:        "string",
-					Description: "ID of the channel to get members for",
-					Required:    true,
-				},
-			},
-			Required: []string{"channel_id"},
-		},
-		s.createToolHandler("get_channel_members"),
+	getChannelMembersTool := mcp.NewTool("get_channel_members",
+		mcp.WithDescription("Get all members of a channel"),
+		mcp.WithString("channel_id", mcp.Description("ID of the channel to get members for"), mcp.Required()),
 	)
+	s.mcpServer.AddTool(getChannelMembersTool, s.createToolHandler("get_channel_members"))
 
 	// Register get_team_members tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "get_team_members",
-			Description: "Get all members of a team",
-			Properties: map[string]MCPProperty{
-				"team_id": {
-					Type:        "string",
-					Description: "ID of the team to get members for",
-					Required:    true,
-				},
-			},
-			Required: []string{"team_id"},
-		},
-		s.createToolHandler("get_team_members"),
+	getTeamMembersTool := mcp.NewTool("get_team_members",
+		mcp.WithDescription("Get all members of a team"),
+		mcp.WithString("team_id", mcp.Description("ID of the team to get members for"), mcp.Required()),
 	)
+	s.mcpServer.AddTool(getTeamMembersTool, s.createToolHandler("get_team_members"))
 
 	// Register development tools if dev mode is enabled
 	if s.config.DevMode {
@@ -321,177 +233,75 @@ func (s *MattermostMCPServer) registerMattermostTools() {
 // registerDevTools registers development-specific tools when dev mode is enabled
 func (s *MattermostMCPServer) registerDevTools() {
 	// Register create_user tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "create_user",
-			Description: "Create a new user account (dev mode only)",
-			Properties: map[string]MCPProperty{
-				"username": {
-					Type:        "string",
-					Description: "Username for the new user",
-					Required:    true,
-				},
-				"email": {
-					Type:        "string",
-					Description: "Email address for the new user",
-					Required:    true,
-				},
-				"password": {
-					Type:        "string",
-					Description: "Password for the new user",
-					Required:    true,
-				},
-				"first_name": {
-					Type:        "string",
-					Description: "First name of the user",
-				},
-				"last_name": {
-					Type:        "string",
-					Description: "Last name of the user",
-				},
-				"nickname": {
-					Type:        "string",
-					Description: "Nickname for the user",
-				},
-			},
-			Required: []string{"username", "email", "password"},
-		},
-		s.createToolHandler("create_user"),
+	createUserTool := mcp.NewTool("create_user",
+		mcp.WithDescription("Create a new user account (dev mode only)"),
+		mcp.WithString("username", mcp.Description("Username for the new user"), mcp.Required()),
+		mcp.WithString("email", mcp.Description("Email address for the new user"), mcp.Required()),
+		mcp.WithString("password", mcp.Description("Password for the new user"), mcp.Required()),
+		mcp.WithString("first_name", mcp.Description("First name of the user")),
+		mcp.WithString("last_name", mcp.Description("Last name of the user")),
+		mcp.WithString("nickname", mcp.Description("Nickname for the user")),
 	)
+	s.mcpServer.AddTool(createUserTool, s.createToolHandler("create_user"))
 
 	// Register create_team tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "create_team",
-			Description: "Create a new team (dev mode only)",
-			Properties: map[string]MCPProperty{
-				"name": {
-					Type:        "string",
-					Description: "URL name for the team",
-					Required:    true,
-				},
-				"display_name": {
-					Type:        "string",
-					Description: "Display name for the team",
-					Required:    true,
-				},
-				"type": {
-					Type:        "string",
-					Description: "Team type: 'O' for open, 'I' for invite only",
-					Required:    true,
-				},
-				"description": {
-					Type:        "string",
-					Description: "Team description",
-				},
-			},
-			Required: []string{"name", "display_name", "type"},
-		},
-		s.createToolHandler("create_team"),
+	createTeamTool := mcp.NewTool("create_team",
+		mcp.WithDescription("Create a new team (dev mode only)"),
+		mcp.WithString("name", mcp.Description("URL name for the team"), mcp.Required()),
+		mcp.WithString("display_name", mcp.Description("Display name for the team"), mcp.Required()),
+		mcp.WithString("type", mcp.Description("Team type: 'O' for open, 'I' for invite only"), mcp.Required()),
+		mcp.WithString("description", mcp.Description("Team description")),
 	)
+	s.mcpServer.AddTool(createTeamTool, s.createToolHandler("create_team"))
 
 	// Register add_user_to_team tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "add_user_to_team",
-			Description: "Add a user to a team (dev mode only)",
-			Properties: map[string]MCPProperty{
-				"user_id": {
-					Type:        "string",
-					Description: "ID of the user to add",
-					Required:    true,
-				},
-				"team_id": {
-					Type:        "string",
-					Description: "ID of the team to add user to",
-					Required:    true,
-				},
-			},
-			Required: []string{"user_id", "team_id"},
-		},
-		s.createToolHandler("add_user_to_team"),
+	addUserToTeamTool := mcp.NewTool("add_user_to_team",
+		mcp.WithDescription("Add a user to a team (dev mode only)"),
+		mcp.WithString("user_id", mcp.Description("ID of the user to add"), mcp.Required()),
+		mcp.WithString("team_id", mcp.Description("ID of the team to add user to"), mcp.Required()),
 	)
+	s.mcpServer.AddTool(addUserToTeamTool, s.createToolHandler("add_user_to_team"))
 
 	// Register add_user_to_channel tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "add_user_to_channel",
-			Description: "Add a user to a channel (dev mode only)",
-			Properties: map[string]MCPProperty{
-				"user_id": {
-					Type:        "string",
-					Description: "ID of the user to add",
-					Required:    true,
-				},
-				"channel_id": {
-					Type:        "string",
-					Description: "ID of the channel to add user to",
-					Required:    true,
-				},
-			},
-			Required: []string{"user_id", "channel_id"},
-		},
-		s.createToolHandler("add_user_to_channel"),
+	addUserToChannelTool := mcp.NewTool("add_user_to_channel",
+		mcp.WithDescription("Add a user to a channel (dev mode only)"),
+		mcp.WithString("user_id", mcp.Description("ID of the user to add"), mcp.Required()),
+		mcp.WithString("channel_id", mcp.Description("ID of the channel to add user to"), mcp.Required()),
 	)
+	s.mcpServer.AddTool(addUserToChannelTool, s.createToolHandler("add_user_to_channel"))
 
 	// Register create_post_as_user tool
-	s.mcpServer.AddTool(
-		MCPTool{
-			Name:        "create_post_as_user",
-			Description: "Create a post as a specific user using username/password login. Use this tool in dev mode for creating realistic multi-user scenarios. Simply provide the username and password of created users.",
-			Properties: map[string]MCPProperty{
-				"username": {
-					Type:        "string",
-					Description: "Username to login as",
-					Required:    true,
-				},
-				"password": {
-					Type:        "string",
-					Description: "Password to login with",
-					Required:    true,
-				},
-				"channel_id": {
-					Type:        "string",
-					Description: "The ID of the channel to post in",
-					Required:    true,
-				},
-				"message": {
-					Type:        "string",
-					Description: "The message content",
-					Required:    true,
-				},
-				"root_id": {
-					Type:        "string",
-					Description: "Optional root post ID for replies",
-				},
-				"props": {
-					Type:        "object",
-					Description: "Optional post properties",
-				},
-			},
-			Required: []string{"username", "password", "channel_id", "message"},
-		},
-		s.createToolHandler("create_post_as_user"),
+	createPostAsUserTool := mcp.NewTool("create_post_as_user",
+		mcp.WithDescription("Create a post as a specific user using username/password login. Use this tool in dev mode for creating realistic multi-user scenarios. Simply provide the username and password of created users."),
+		mcp.WithString("username", mcp.Description("Username to login as"), mcp.Required()),
+		mcp.WithString("password", mcp.Description("Password to login with"), mcp.Required()),
+		mcp.WithString("channel_id", mcp.Description("The ID of the channel to post in"), mcp.Required()),
+		mcp.WithString("message", mcp.Description("The message content"), mcp.Required()),
+		mcp.WithString("root_id", mcp.Description("Optional root post ID for replies")),
+		mcp.WithString("props", mcp.Description("Optional post properties (JSON string)")),
 	)
+	s.mcpServer.AddTool(createPostAsUserTool, s.createToolHandler("create_post_as_user"))
 }
 
 // createToolHandler creates a tool handler that bridges to our existing tool implementation
-func (s *MattermostMCPServer) createToolHandler(toolName string) MCPToolHandler {
-	return func(ctx context.Context, request MCPToolRequest) (*MCPToolResult, error) {
+func (s *MattermostMCPServer) createToolHandler(toolName string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Get authenticated client
-		client, userID, err := s.getAuthenticatedClient(ctx)
+		client, _, err := s.getAuthenticatedClient(ctx)
 		if err != nil {
-			return &MCPToolResult{
-				Content: []MCPContent{{
-					Type: "text",
-					Text: "Error: " + err.Error(),
-				}},
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: "Error: " + err.Error(),
+					},
+				},
 				IsError: true,
 			}, nil
 		}
 
-		// Add user context
-		ctxWithUser := context.WithValue(ctx, UserIDKey, userID)
+		// No need for user context - Mattermost gets userID from session
+		ctxWithUser := ctx
 
 		// Use our existing tool provider to execute the tool
 		toolProvider := NewMattermostToolProvider(s.authProvider, s.logger)
@@ -500,117 +310,120 @@ func (s *MattermostMCPServer) createToolHandler(toolName string) MCPToolHandler 
 		devToolProvider := NewDevToolProvider(s.authProvider, s.logger, s.config.ServerURL)
 
 		// Execute the tool using our existing implementation
-		var result *ToolResult
+		var result *mcp.CallToolResult
 		switch toolName {
 		case "read_post":
-			result, err = toolProvider.readPost(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.readPost(ctxWithUser, client, request.Params.Arguments)
 		case "read_channel":
-			result, err = toolProvider.readChannel(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.readChannel(ctxWithUser, client, request.Params.Arguments)
 		case "search_posts":
-			result, err = toolProvider.searchPosts(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.searchPosts(ctxWithUser, client, request.Params.Arguments)
 		case "create_post":
-			result, err = toolProvider.createPost(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.createPost(ctxWithUser, client, request.Params.Arguments)
 		case "create_channel":
-			result, err = toolProvider.createChannel(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.createChannel(ctxWithUser, client, request.Params.Arguments)
 		case "get_channel_info":
-			result, err = toolProvider.getChannelInfo(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.getChannelInfo(ctxWithUser, client, request.Params.Arguments)
 		case "get_team_info":
-			result, err = toolProvider.getTeamInfo(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.getTeamInfo(ctxWithUser, client, request.Params.Arguments)
 		case "search_users":
-			result, err = toolProvider.searchUsers(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.searchUsers(ctxWithUser, client, request.Params.Arguments)
 		case "get_channel_members":
-			result, err = toolProvider.getChannelMembers(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.getChannelMembers(ctxWithUser, client, request.Params.Arguments)
 		case "get_team_members":
-			result, err = toolProvider.getTeamMembers(ctxWithUser, client, request.Arguments)
+			result, err = toolProvider.getTeamMembers(ctxWithUser, client, request.Params.Arguments)
 		// Development tools (only available in dev mode)
 		case "create_user":
 			if !s.config.DevMode {
-				return &MCPToolResult{
-					Content: []MCPContent{{
-						Type: "text",
-						Text: "Error: create_user tool is only available in development mode",
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: "Error: create_user tool is only available in development mode",
+						},
+					},
 					IsError: true,
 				}, nil
 			}
-			result, err = devToolProvider.createUser(ctxWithUser, client, request.Arguments)
+			result, err = devToolProvider.createUser(ctxWithUser, client, request.Params.Arguments)
 		case "create_team":
 			if !s.config.DevMode {
-				return &MCPToolResult{
-					Content: []MCPContent{{
-						Type: "text",
-						Text: "Error: create_team tool is only available in development mode",
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: "Error: create_team tool is only available in development mode",
+						},
+					},
 					IsError: true,
 				}, nil
 			}
-			result, err = devToolProvider.createTeam(ctxWithUser, client, request.Arguments)
+			result, err = devToolProvider.createTeam(ctxWithUser, client, request.Params.Arguments)
 		case "add_user_to_team":
 			if !s.config.DevMode {
-				return &MCPToolResult{
-					Content: []MCPContent{{
-						Type: "text",
-						Text: "Error: add_user_to_team tool is only available in development mode",
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: "Error: add_user_to_team tool is only available in development mode",
+						},
+					},
 					IsError: true,
 				}, nil
 			}
-			result, err = devToolProvider.addUserToTeam(ctxWithUser, client, request.Arguments)
+			result, err = devToolProvider.addUserToTeam(ctxWithUser, client, request.Params.Arguments)
 		case "add_user_to_channel":
 			if !s.config.DevMode {
-				return &MCPToolResult{
-					Content: []MCPContent{{
-						Type: "text",
-						Text: "Error: add_user_to_channel tool is only available in development mode",
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: "Error: add_user_to_channel tool is only available in development mode",
+						},
+					},
 					IsError: true,
 				}, nil
 			}
-			result, err = devToolProvider.addUserToChannel(ctxWithUser, client, request.Arguments)
+			result, err = devToolProvider.addUserToChannel(ctxWithUser, client, request.Params.Arguments)
 		case "create_post_as_user":
 			if !s.config.DevMode {
-				return &MCPToolResult{
-					Content: []MCPContent{{
-						Type: "text",
-						Text: "Error: create_post_as_user tool is only available in development mode",
-					}},
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: "Error: create_post_as_user tool is only available in development mode",
+						},
+					},
 					IsError: true,
 				}, nil
 			}
-			result, err = devToolProvider.createPostAsUser(ctxWithUser, request.Arguments)
+			result, err = devToolProvider.createPostAsUser(ctxWithUser, request.Params.Arguments)
 		default:
-			return &MCPToolResult{
-				Content: []MCPContent{{
-					Type: "text",
-					Text: "Error: unknown tool: " + toolName,
-				}},
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: "Error: unknown tool: " + toolName,
+					},
+				},
 				IsError: true,
 			}, nil
 		}
 
 		if err != nil {
-			return &MCPToolResult{
-				Content: []MCPContent{{
-					Type: "text",
-					Text: "Error: " + err.Error(),
-				}},
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: "Error: " + err.Error(),
+					},
+				},
 				IsError: true,
 			}, nil
 		}
 
-		// Convert legacy ToolResult to MCPToolResult
-		var content []MCPContent
-		for _, c := range result.Content {
-			content = append(content, MCPContent{
-				Type: "text",
-				Text: c.Text,
-			})
-		}
-
-		return &MCPToolResult{
-			Content: content,
-			IsError: result.IsError,
-		}, nil
+		// Result is already a *mcp.CallToolResult
+		return result, nil
 	}
 }
 
@@ -630,17 +443,21 @@ func (s *MattermostMCPServer) getAuthenticatedClient(ctx context.Context) (*mode
 		return nil, "", fmt.Errorf("no authentication token available - ensure token is provided via context for OAuth or config for PAT")
 	}
 
-	// Validate token and get user ID
-	userID, err := s.authProvider.ValidateAuth(ctx, token)
-	if err != nil {
-		return nil, "", fmt.Errorf("authentication failed: %w", err)
-	}
+	// Create client directly - no validation needed since Mattermost APIs will validate
+	client := model.NewAPIv4Client(s.config.ServerURL)
+	client.SetToken(token)
 
-	// Get authenticated client
-	client, err := s.authProvider.GetMattermostClient(ctx, userID, token)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get authenticated client: %w", err)
-	}
+	return client, "", nil // userID not needed - Mattermost gets it from session
+}
 
-	return client, userID, nil
+// mlogWriter adapts mlog.LoggerIFace to io.Writer for the mcp-go error logger
+type mlogWriter struct {
+	logger mlog.LoggerIFace
+}
+
+func (w *mlogWriter) Write(p []byte) (n int, err error) {
+	if w.logger != nil {
+		w.logger.Error(string(p))
+	}
+	return len(p), nil
 }
