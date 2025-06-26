@@ -42,7 +42,7 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 	}
 
 	// For standalone mode (stdio with PAT), validate token at startup
-	if (config.Transport == "stdio" || config.Transport == "") && config.PersonalAccessToken != "" {
+	if config.Transport == "stdio" {
 		if err := mattermostServer.validateTokenAtStartup(); err != nil {
 			return nil, fmt.Errorf("startup token validation failed: %w", err)
 		}
@@ -471,4 +471,17 @@ func (w *mlogWriter) Write(p []byte) (n int, err error) {
 		w.logger.Error(string(p))
 	}
 	return len(p), nil
+}
+
+// CallToolForTest calls a tool handler directly for testing purposes
+// This bypasses the MCP transport layer and calls the tool implementation directly
+func (s *MattermostMCPServer) CallToolForTest(ctx context.Context, toolName string, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	// Create a proper MCP CallToolRequest
+	request := mcp.CallToolRequest{}
+	request.Params.Name = toolName
+	request.Params.Arguments = arguments
+
+	// Get and call the tool handler
+	toolHandler := s.createToolHandler(toolName)
+	return toolHandler(ctx, request)
 }

@@ -87,7 +87,7 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 	if len(posts) > 0 {
 		channel, _, err := client.GetChannel(context.Background(), posts[0].ChannelId, "")
 		if err == nil {
-			result.WriteString(fmt.Sprintf("## Channel: %s\n\n", channel.DisplayName))
+			result.WriteString(fmt.Sprintf("Channel: %s\n\n", channel.DisplayName))
 		}
 	}
 
@@ -104,13 +104,13 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 
 		// Format post
 		if i == 0 || post.RootId == "" {
-			result.WriteString(fmt.Sprintf("### Post by @%s at %s\n", username, timestamp))
+			result.WriteString(fmt.Sprintf("Post by @%s at %s\n", username, timestamp))
 		} else {
-			result.WriteString(fmt.Sprintf("#### Reply by @%s at %s\n", username, timestamp))
+			result.WriteString(fmt.Sprintf("Reply by @%s at %s\n", username, timestamp))
 		}
-		result.WriteString(fmt.Sprintf("**Post ID:** %s\n\n", post.Id))
+		result.WriteString(fmt.Sprintf("Post ID: %s\n\n", post.Id))
 		result.WriteString(post.Message)
-		result.WriteString("\n\n---\n\n")
+		result.WriteString("\n\n")
 	}
 
 	return &mcp.CallToolResult{
@@ -200,9 +200,9 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 
 	// Format the response
 	result := strings.Builder{}
-	result.WriteString(fmt.Sprintf("## Channel: %s\n", channel.DisplayName))
-	result.WriteString(fmt.Sprintf("**Channel ID:** %s\n", channel.Id))
-	result.WriteString(fmt.Sprintf("**Posts retrieved:** %d\n\n", len(postList.Posts)))
+	result.WriteString(fmt.Sprintf("Channel: %s\n", channel.DisplayName))
+	result.WriteString(fmt.Sprintf("Channel ID: %s\n", channel.Id))
+	result.WriteString(fmt.Sprintf("Posts retrieved: %d\n\n", len(postList.Posts)))
 
 	// Convert to ordered slice
 	posts := postList.ToSlice()
@@ -218,10 +218,10 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 		// Format timestamp
 		timestamp := time.Unix(post.CreateAt/1000, 0).Format("2006-01-02 15:04:05")
 
-		result.WriteString(fmt.Sprintf("### @%s - %s\n", username, timestamp))
-		result.WriteString(fmt.Sprintf("**Post ID:** %s\n\n", post.Id))
+		result.WriteString(fmt.Sprintf("@%s - %s\n", username, timestamp))
+		result.WriteString(fmt.Sprintf("Post ID: %s\n\n", post.Id))
 		result.WriteString(post.Message)
-		result.WriteString("\n\n---\n\n")
+		result.WriteString("\n\n")
 	}
 
 	return &mcp.CallToolResult{
@@ -267,8 +267,8 @@ func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.
 
 	// Format the response
 	result := strings.Builder{}
-	result.WriteString(fmt.Sprintf("## Search Results for: \"%s\"\n", query))
-	result.WriteString(fmt.Sprintf("**Results found:** %d\n\n", len(postList.Posts)))
+	result.WriteString(fmt.Sprintf("Search Results for: \"%s\"\n", query))
+	result.WriteString(fmt.Sprintf("Results found: %d\n\n", len(postList.Posts)))
 
 	// Convert to ordered slice and limit results
 	posts := postList.ToSlice()
@@ -305,10 +305,10 @@ func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.
 		// Format timestamp
 		timestamp := time.Unix(post.CreateAt/1000, 0).Format("2006-01-02 15:04:05")
 
-		result.WriteString(fmt.Sprintf("### @%s in %s - %s\n", username, channelName, timestamp))
-		result.WriteString(fmt.Sprintf("**Post ID:** %s\n\n", post.Id))
+		result.WriteString(fmt.Sprintf("@%s in %s - %s\n", username, channelName, timestamp))
+		result.WriteString(fmt.Sprintf("Post ID: %s\n\n", post.Id))
 		result.WriteString(post.Message)
-		result.WriteString("\n\n---\n\n")
+		result.WriteString("\n\n")
 	}
 
 	return &mcp.CallToolResult{
@@ -547,16 +547,16 @@ channelFound:
 		channelTypeStr = "Group Message"
 	}
 
-	result := fmt.Sprintf(`## Channel Information
+	result := fmt.Sprintf(`Channel Information
 
-**Name:** %s
-**Display Name:** %s
-**ID:** %s
-**Type:** %s
-**Team ID:** %s
-**Created:** %s
-**Purpose:** %s
-**Header:** %s
+Name: %s
+Display Name: %s
+ID: %s
+Type: %s
+Team ID: %s
+Created: %s
+Purpose: %s
+Header: %s
 `,
 		channel.Name,
 		channel.DisplayName,
@@ -679,16 +679,16 @@ teamFound:
 	}
 
 	// Format team info
-	result := fmt.Sprintf(`## Team Information
+	result := fmt.Sprintf(`Team Information
 
-**Name:** %s
-**Display Name:** %s
-**ID:** %s
-**Type:** %s
-**Description:** %s
-**Created:** %s
-**Allow Open Invite:** %t
-**Invite ID:** %s
+Name: %s
+Display Name: %s
+ID: %s
+Type: %s
+Description: %s
+Created: %s
+Allow Open Invite: %t
+Invite ID: %s
 `,
 		team.Name,
 		team.DisplayName,
