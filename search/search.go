@@ -73,6 +73,11 @@ func New(
 	}
 }
 
+// Enabled returns true if the search service is enabled and functional
+func (s *Search) Enabled() bool {
+	return s.EmbeddingSearch != nil
+}
+
 // convertToRAGResults converts embeddings.EmbeddingSearchResult to RAGResult with enriched metadata
 func (s *Search) convertToRAGResults(searchResults []embeddings.SearchResult) []RAGResult {
 	var ragResults []RAGResult
