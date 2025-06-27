@@ -912,10 +912,9 @@ func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *
 			if err != nil {
 				p.logger.Warn("Error getting user info for channel member", mlog.Err(err), mlog.String("channel_id", channelID), mlog.String("user_id", member.UserId))
 				continue // Skip users we can't fetch
-			} else {
-				user = fetchedUser
-				userCache[member.UserId] = user
 			}
+			user = fetchedUser
+			userCache[member.UserId] = user
 		}
 		if user != nil {
 			users = append(users, user)
@@ -1011,10 +1010,9 @@ func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *mod
 			if err != nil {
 				p.logger.Warn("Error getting user info for team member", mlog.Err(err), mlog.String("team_id", teamID), mlog.String("user_id", member.UserId))
 				continue // Skip users we can't fetch
-			} else {
-				user = fetchedUser
-				userCache[member.UserId] = user
 			}
+			user = fetchedUser
+			userCache[member.UserId] = user
 		}
 		if user != nil {
 			users = append(users, user)

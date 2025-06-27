@@ -56,7 +56,6 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 	return mattermostServer, nil
 }
 
-
 // Serve starts the server using the configured transport
 func (s *MattermostMCPServer) Serve() error {
 	switch s.config.Transport {
