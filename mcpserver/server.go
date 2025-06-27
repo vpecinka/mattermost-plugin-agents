@@ -43,7 +43,9 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 
 	// For standalone mode (stdio with PAT), validate token at startup
 	if config.Transport == "stdio" {
-		if err := mattermostServer.validateTokenAtStartup(); err != nil {
+		ctx := context.Background()
+		_, err := authProvider.ValidateAuth(ctx, config.PersonalAccessToken)
+		if err != nil {
 			return nil, fmt.Errorf("startup token validation failed: %w", err)
 		}
 	}
@@ -54,33 +56,6 @@ func NewMattermostMCPServer(config Config, authProvider AuthenticationProvider, 
 	return mattermostServer, nil
 }
 
-// validateTokenAtStartup validates the PAT token during server initialization
-func (s *MattermostMCPServer) validateTokenAtStartup() error {
-	// Create client with the configured token
-	client := model.NewAPIv4Client(s.config.ServerURL)
-	client.SetToken(s.config.PersonalAccessToken)
-
-	s.logger.Debug("Validating token at startup", mlog.String("server_url", s.config.ServerURL))
-
-	// Test the token with a simple GetMe call
-	user, response, err := client.GetMe(context.Background(), "")
-	if err != nil {
-		if response != nil {
-			s.logger.Error("GetMe API call failed",
-				mlog.Int("status_code", response.StatusCode),
-				mlog.String("server_url", s.config.ServerURL),
-				mlog.Err(err))
-		}
-		return fmt.Errorf("token validation failed: %w", err)
-	}
-
-	s.logger.Debug("Token validation successful",
-		mlog.String("user_id", user.Id),
-		mlog.String("username", user.Username),
-		mlog.String("email", user.Email))
-
-	return nil
-}
 
 // Serve starts the server using the configured transport
 func (s *MattermostMCPServer) Serve() error {
@@ -196,15 +171,19 @@ func (s *MattermostMCPServer) registerMattermostTools() {
 
 	// Register get_channel_members tool
 	getChannelMembersTool := mcp.NewTool("get_channel_members",
-		mcp.WithDescription("Get all members of a channel"),
+		mcp.WithDescription("Get members of a channel with pagination support"),
 		mcp.WithString("channel_id", mcp.Description("ID of the channel to get members for"), mcp.Required()),
+		mcp.WithNumber("limit", mcp.Description("Number of members to return (default: 50, max: 200)")),
+		mcp.WithNumber("page", mcp.Description("Page number for pagination (default: 0)")),
 	)
 	s.mcpServer.AddTool(getChannelMembersTool, s.createToolHandler("get_channel_members"))
 
 	// Register get_team_members tool
 	getTeamMembersTool := mcp.NewTool("get_team_members",
-		mcp.WithDescription("Get all members of a team"),
+		mcp.WithDescription("Get members of a team with pagination support"),
 		mcp.WithString("team_id", mcp.Description("ID of the team to get members for"), mcp.Required()),
+		mcp.WithNumber("limit", mcp.Description("Number of members to return (default: 50, max: 200)")),
+		mcp.WithNumber("page", mcp.Description("Page number for pagination (default: 0)")),
 	)
 	s.mcpServer.AddTool(getTeamMembersTool, s.createToolHandler("get_team_members"))
 

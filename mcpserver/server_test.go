@@ -195,11 +195,11 @@ func TestMCPServerConfiguration(t *testing.T) {
 		}
 
 		authProvider := mcpserver.NewTokenAuthenticationProvider(suite.serverURL, "", suite.logger)
-		mcpServer, err := mcpserver.NewMattermostMCPServer(config, authProvider, suite.logger)
+		_, err := mcpserver.NewMattermostMCPServer(config, authProvider, suite.logger)
 
-		// Empty token should not fail at creation time (validation is skipped)
-		require.NoError(t, err, "Empty token should not fail at creation")
-		assert.NotNil(t, mcpServer, "MCP server should be created even with empty token")
+		// Empty token should fail validation for stdio transport
+		assert.Error(t, err, "Empty token should fail validation")
+		assert.Contains(t, err.Error(), "startup token validation failed", "Error should mention startup validation failure")
 	})
 
 	t.Run("DevModeConfiguration", func(t *testing.T) {

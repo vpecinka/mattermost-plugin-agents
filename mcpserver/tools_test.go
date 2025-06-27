@@ -324,8 +324,6 @@ func TestMCPToolsIntegration(t *testing.T) {
 			if len(result.Content) > 0 {
 				if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 					assert.NotEmpty(t, textContent.Text, "Response should have content")
-					// The search might or might not find the post immediately due to indexing delays
-					// so we just verify the API works without erroring
 				}
 			}
 
@@ -350,14 +348,14 @@ func TestMCPToolsIntegration(t *testing.T) {
 // This provides true integration testing by going through the full MCP stack
 func executeToolWithMCP(t *testing.T, suite *TestSuite, toolName string, args map[string]interface{}) *mcp.CallToolResult {
 	require.NotNil(t, suite.mcpServer, "MCP server must be created before calling tools")
-	
+
 	ctx := context.Background()
-	
+
 	// Call the tool using the test helper method that goes through the real MCP tool handlers
 	result, err := suite.mcpServer.CallToolForTest(ctx, toolName, args)
-	
+
 	require.NoError(t, err, "Tool handler should not return an error")
 	require.NotNil(t, result, "Tool handler should return a result")
-	
+
 	return result
 }

@@ -86,24 +86,36 @@ func (p *MattermostToolProvider) readPost(ctx context.Context, client *model.Cli
 	// Get channel info for the first post
 	if len(posts) > 0 {
 		channel, _, err := client.GetChannel(context.Background(), posts[0].ChannelId, "")
-		if err == nil {
+		if err != nil {
+			p.logger.Warn("Error getting channel info for post", mlog.Err(err), mlog.String("post_id", posts[0].Id))
+		} else {
 			result.WriteString(fmt.Sprintf("Channel: %s\n\n", channel.DisplayName))
 		}
 	}
 
-	for i, post := range posts {
-		// Get user info
-		user, _, err := client.GetUser(context.Background(), post.UserId, "")
+	// Cache users to avoid duplicate API calls
+	userCache := make(map[string]string)
+
+	for _, post := range posts {
+		// Get user info with caching
 		username := "Unknown User"
-		if err == nil {
-			username = user.Username
+		if cachedUsername, exists := userCache[post.UserId]; exists {
+			username = cachedUsername
+		} else {
+			user, _, err := client.GetUser(context.Background(), post.UserId, "")
+			if err != nil {
+				p.logger.Warn("Error getting user info for post", mlog.Err(err), mlog.String("post_id", post.Id), mlog.String("user_id", post.UserId))
+			} else {
+				username = user.Username
+				userCache[post.UserId] = username
+			}
 		}
 
 		// Format timestamp
 		timestamp := time.Unix(post.CreateAt/1000, 0).Format("2006-01-02 15:04:05")
 
 		// Format post
-		if i == 0 || post.RootId == "" {
+		if post.RootId == "" {
 			result.WriteString(fmt.Sprintf("Post by @%s at %s\n", username, timestamp))
 		} else {
 			result.WriteString(fmt.Sprintf("Reply by @%s at %s\n", username, timestamp))
@@ -179,11 +191,11 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 			postList, _, err = client.GetPostsSince(context.Background(), channelID, sinceMs, false)
 		} else {
 			// Get recent posts
-			postList, _, err = client.GetPostsBefore(context.Background(), channelID, "", 0, limit, "", false, false)
+			postList, _, err = client.GetPostsForChannel(context.Background(), channelID, 0, limit, "", false, false)
 		}
 	} else {
 		// Get recent posts
-		postList, _, err = client.GetPostsBefore(context.Background(), channelID, "", 0, limit, "", false, false)
+		postList, _, err = client.GetPostsForChannel(context.Background(), channelID, 0, limit, "", false, false)
 	}
 
 	if err != nil {
@@ -207,12 +219,23 @@ func (p *MattermostToolProvider) readChannel(ctx context.Context, client *model.
 	// Convert to ordered slice
 	posts := postList.ToSlice()
 
+	// Cache users to avoid duplicate API calls
+	userCache := make(map[string]string)
+
 	for _, post := range posts {
-		// Get user info
-		user, _, err := client.GetUser(context.Background(), post.UserId, "")
+		// Get user info with caching
 		username := "Unknown User"
-		if err == nil {
-			username = user.Username
+		if cachedUsername, exists := userCache[post.UserId]; exists {
+			username = cachedUsername
+		} else {
+			user, _, err := client.GetUser(context.Background(), post.UserId, "")
+			if err != nil {
+				// Keep default "Unknown User" if user fetch fails
+				p.logger.Warn("Error getting user info for post", mlog.Err(err), mlog.String("post_id", post.Id), mlog.String("user_id", post.UserId))
+			} else {
+				username = user.Username
+				userCache[post.UserId] = username
+			}
 		}
 
 		// Format timestamp
@@ -287,19 +310,39 @@ func (p *MattermostToolProvider) searchPosts(ctx context.Context, client *model.
 		posts = posts[:limit]
 	}
 
+	// Cache users and channels to avoid duplicate API calls
+	userCache := make(map[string]string)
+	channelCache := make(map[string]string)
+
 	for _, post := range posts {
-		// Get user info
-		user, _, err := client.GetUser(context.Background(), post.UserId, "")
+		// Get user info with caching
 		username := "Unknown User"
-		if err == nil {
-			username = user.Username
+		if cachedUsername, exists := userCache[post.UserId]; exists {
+			username = cachedUsername
+		} else {
+			user, _, err := client.GetUser(context.Background(), post.UserId, "")
+			if err != nil {
+				// Keep default "Unknown User" if user fetch fails
+				p.logger.Warn("Error getting user info for post", mlog.Err(err), mlog.String("post_id", post.Id), mlog.String("user_id", post.UserId))
+			} else {
+				username = user.Username
+				userCache[post.UserId] = username
+			}
 		}
 
-		// Get channel info
-		channel, _, err := client.GetChannel(context.Background(), post.ChannelId, "")
+		// Get channel info with caching
 		channelName := "Unknown Channel"
-		if err == nil {
-			channelName = channel.DisplayName
+		if cachedChannelName, exists := channelCache[post.ChannelId]; exists {
+			channelName = cachedChannelName
+		} else {
+			channel, _, err := client.GetChannel(context.Background(), post.ChannelId, "")
+			if err != nil {
+				// Keep default "Unknown Channel" if channel fetch fails
+				p.logger.Warn("Error getting channel info for post", mlog.Err(err), mlog.String("post_id", post.Id), mlog.String("channel_id", post.ChannelId))
+			} else {
+				channelName = channel.DisplayName
+				channelCache[post.ChannelId] = channelName
+			}
 		}
 
 		// Format timestamp
@@ -369,7 +412,10 @@ func (p *MattermostToolProvider) createPost(ctx context.Context, client *model.C
 	// Get channel info for response
 	channel, _, err := client.GetChannel(context.Background(), channelID, "")
 	channelName := channelID
-	if err == nil {
+	if err != nil {
+		// Use channel ID as fallback if display name cannot be retrieved
+		p.logger.Warn("Error getting channel info for post", mlog.Err(err), mlog.String("post_id", post.Id), mlog.String("channel_id", post.ChannelId))
+	} else {
 		channelName = channel.DisplayName
 	}
 
@@ -751,7 +797,8 @@ func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.
 
 	// Search for users
 	users, _, err := client.SearchUsers(context.Background(), &model.UserSearch{
-		Term: term,
+		Term:  term,
+		Limit: limit,
 	})
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -763,11 +810,6 @@ func (p *MattermostToolProvider) searchUsers(ctx context.Context, client *model.
 			},
 			IsError: true,
 		}, nil
-	}
-
-	// Limit results
-	if len(users) > limit {
-		users = users[:limit]
 	}
 
 	if len(users) == 0 {
@@ -805,8 +847,36 @@ func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *
 		return nil, fmt.Errorf("channel_id is required and must be a string")
 	}
 
+	// Extract optional limit and page parameters
+	limit := 50 // Default limit
+	if val, exists := arguments["limit"]; exists {
+		if l, limitOk := val.(float64); limitOk {
+			limit = int(l)
+		} else if l, limitIntOk := val.(int); limitIntOk {
+			limit = l
+		}
+	}
+	if limit > 200 {
+		limit = 200 // Cap at 200
+	}
+	if limit < 1 {
+		limit = 1
+	}
+
+	page := 0
+	if val, exists := arguments["page"]; exists {
+		if p, pageOk := val.(float64); pageOk {
+			page = int(p)
+		} else if p, pageIntOk := val.(int); pageIntOk {
+			page = p
+		}
+	}
+	if page < 0 {
+		page = 0
+	}
+
 	// Get channel members
-	members, _, err := client.GetChannelMembers(context.Background(), channelID, 0, 200, "")
+	members, _, err := client.GetChannelMembers(context.Background(), channelID, page, limit, "")
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -830,18 +900,30 @@ func (p *MattermostToolProvider) getChannelMembers(ctx context.Context, client *
 		}, nil
 	}
 
-	// Get user details for each member
+	// Get user details for each member with caching
+	userCache := make(map[string]*model.User)
 	var users []*model.User
 	for _, member := range members {
-		user, _, err := client.GetUser(context.Background(), member.UserId, "")
-		if err != nil {
-			continue // Skip users we can't fetch
+		var user *model.User
+		if cachedUser, exists := userCache[member.UserId]; exists {
+			user = cachedUser
+		} else {
+			fetchedUser, _, err := client.GetUser(context.Background(), member.UserId, "")
+			if err != nil {
+				p.logger.Warn("Error getting user info for channel member", mlog.Err(err), mlog.String("channel_id", channelID), mlog.String("user_id", member.UserId))
+				continue // Skip users we can't fetch
+			} else {
+				user = fetchedUser
+				userCache[member.UserId] = user
+			}
 		}
-		users = append(users, user)
+		if user != nil {
+			users = append(users, user)
+		}
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Found %d members in channel %s:\n", len(users), channelID))
+	result.WriteString(fmt.Sprintf("Found %d members in channel %s (page %d, limit %d):\n", len(users), channelID, page, limit))
 	for i, user := range users {
 		result.WriteString(fmt.Sprintf("  %d. %s (%s) - %s %s <%s>\n",
 			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))
@@ -864,8 +946,36 @@ func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *mod
 		return nil, fmt.Errorf("team_id is required and must be a string")
 	}
 
+	// Extract optional limit and page parameters
+	limit := 50 // Default limit
+	if val, exists := arguments["limit"]; exists {
+		if l, limitOk := val.(float64); limitOk {
+			limit = int(l)
+		} else if l, limitIntOk := val.(int); limitIntOk {
+			limit = l
+		}
+	}
+	if limit > 200 {
+		limit = 200 // Cap at 200
+	}
+	if limit < 1 {
+		limit = 1
+	}
+
+	page := 0
+	if val, exists := arguments["page"]; exists {
+		if p, pageOk := val.(float64); pageOk {
+			page = int(p)
+		} else if p, pageIntOk := val.(int); pageIntOk {
+			page = p
+		}
+	}
+	if page < 0 {
+		page = 0
+	}
+
 	// Get team members
-	members, _, err := client.GetTeamMembers(context.Background(), teamID, 0, 200, "")
+	members, _, err := client.GetTeamMembers(context.Background(), teamID, page, limit, "")
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -889,18 +999,30 @@ func (p *MattermostToolProvider) getTeamMembers(ctx context.Context, client *mod
 		}, nil
 	}
 
-	// Get user details for each member
+	// Get user details for each member with caching
+	userCache := make(map[string]*model.User)
 	var users []*model.User
 	for _, member := range members {
-		user, _, err := client.GetUser(context.Background(), member.UserId, "")
-		if err != nil {
-			continue // Skip users we can't fetch
+		var user *model.User
+		if cachedUser, exists := userCache[member.UserId]; exists {
+			user = cachedUser
+		} else {
+			fetchedUser, _, err := client.GetUser(context.Background(), member.UserId, "")
+			if err != nil {
+				p.logger.Warn("Error getting user info for team member", mlog.Err(err), mlog.String("team_id", teamID), mlog.String("user_id", member.UserId))
+				continue // Skip users we can't fetch
+			} else {
+				user = fetchedUser
+				userCache[member.UserId] = user
+			}
 		}
-		users = append(users, user)
+		if user != nil {
+			users = append(users, user)
+		}
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Found %d members in team %s:\n", len(users), teamID))
+	result.WriteString(fmt.Sprintf("Found %d members in team %s (page %d, limit %d):\n", len(users), teamID, page, limit))
 	for i, user := range users {
 		result.WriteString(fmt.Sprintf("  %d. %s (%s) - %s %s <%s>\n",
 			i+1, user.Username, user.Id, user.FirstName, user.LastName, user.Email))

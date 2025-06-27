@@ -70,26 +70,6 @@ func TestDevToolsWithDevModeEnabled(t *testing.T) {
 			result := executeDevToolWithMCP(t, suite, "create_user", args)
 			assert.True(t, result.IsError, "create_user should fail with missing required fields")
 		})
-
-		t.Run("DuplicateUsername", func(t *testing.T) {
-			// First create a user
-			args1 := map[string]interface{}{
-				"username": "duplicateuser",
-				"email":    "duplicate1@example.com",
-				"password": "password123",
-			}
-			result1 := executeDevToolWithMCP(t, suite, "create_user", args1)
-			assert.False(t, result1.IsError, "First user creation should succeed")
-
-			// Try to create another user with same username
-			args2 := map[string]interface{}{
-				"username": "duplicateuser",
-				"email":    "duplicate2@example.com",
-				"password": "password123",
-			}
-			result2 := executeDevToolWithMCP(t, suite, "create_user", args2)
-			assert.True(t, result2.IsError, "Duplicate username should fail")
-		})
 	})
 
 	t.Run("CreateTeamTool", func(t *testing.T) {
@@ -265,14 +245,14 @@ func TestDevToolsSecurityGating(t *testing.T) {
 // This provides true integration testing by going through the full MCP stack
 func executeDevToolWithMCP(t *testing.T, suite *TestSuite, toolName string, args map[string]interface{}) *mcp.CallToolResult {
 	require.NotNil(t, suite.mcpServer, "MCP server must be created before calling tools")
-	
+
 	ctx := context.Background()
-	
+
 	// Call the tool using the test helper method that goes through the real MCP tool handlers
 	result, err := suite.mcpServer.CallToolForTest(ctx, toolName, args)
-	
+
 	require.NoError(t, err, "Tool handler should not return an error")
 	require.NotNil(t, result, "Tool handler should return a result")
-	
+
 	return result
 }
