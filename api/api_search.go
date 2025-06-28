@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mattermost/mattermost-plugin-ai/bots"
+	"github.com/mattermost/mattermost-plugin-ai/search"
 )
 
 // SearchRequest represents a search query request from the API
@@ -24,8 +25,8 @@ func (a *API) handleRunSearch(c *gin.Context) {
 	userID := c.GetHeader("Mattermost-User-Id")
 	bot := c.MustGet(ContextBotKey).(*bots.Bot)
 
-	if a.searchService == nil || !a.searchService.Enabled() {
-		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("search functionality is not configured"))
+	if err := search.RequireSearch(a.searchService); err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
@@ -53,8 +54,8 @@ func (a *API) handleSearchQuery(c *gin.Context) {
 	userID := c.GetHeader("Mattermost-User-Id")
 	bot := c.MustGet(ContextBotKey).(*bots.Bot)
 
-	if a.searchService == nil || !a.searchService.Enabled() {
-		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("search functionality is not configured"))
+	if err := search.RequireSearch(a.searchService); err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 

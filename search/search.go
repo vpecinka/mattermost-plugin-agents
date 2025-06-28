@@ -78,6 +78,19 @@ func (s *Search) Enabled() bool {
 	return s.EmbeddingSearch != nil
 }
 
+// IsSearchAvailable checks if the search service is available and enabled
+func IsSearchAvailable(service *Search) bool {
+	return service != nil && service.Enabled()
+}
+
+// RequireSearch returns an error if search is not available
+func RequireSearch(service *Search) error {
+	if !IsSearchAvailable(service) {
+		return fmt.Errorf("search functionality is not configured")
+	}
+	return nil
+}
+
 // convertToRAGResults converts embeddings.EmbeddingSearchResult to RAGResult with enriched metadata
 func (s *Search) convertToRAGResults(searchResults []embeddings.SearchResult) []RAGResult {
 	var ragResults []RAGResult

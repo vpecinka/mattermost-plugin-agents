@@ -89,7 +89,7 @@ func TestMMToolProvider_GetTools(t *testing.T) {
 				}
 			}
 
-			require.Equal(t, test.expectedSearchToolPresent, searchToolFound, 
+			require.Equal(t, test.expectedSearchToolPresent, searchToolFound,
 				"SearchServer tool presence should match expected value")
 		})
 	}

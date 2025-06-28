@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mattermost/mattermost-plugin-ai/embeddings"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
+	"github.com/mattermost/mattermost-plugin-ai/mmapi/mocks"
 	"github.com/mattermost/mattermost-plugin-ai/search"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/stretchr/testify/mock"
@@ -47,21 +49,26 @@ func TestHandleRunSearch(t *testing.T) {
 	tests := []struct {
 		name           string
 		searchService  *search.Search
+		setupMock      func(t *testing.T) *search.Search
 		requestBody    SearchRequest
 		expectedStatus int
 		expectError    bool
 	}{
 		{
-			name:          "search succeeds - service enabled",
-			searchService: search.New(&mockEmbeddingSearchAPI{}, nil, nil, nil, nil),
+			name: "search fails - DM error",
+			setupMock: func(t *testing.T) *search.Search {
+				mockClient := mocks.NewMockClient(t)
+				mockClient.On("DM", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("DM failed"))
+				return search.New(&mockEmbeddingSearchAPI{}, mockClient, nil, nil, nil)
+			},
 			requestBody: SearchRequest{
 				Query:      "test query",
 				TeamID:     "team123",
 				ChannelID:  "channel123",
 				MaxResults: 10,
 			},
-			expectedStatus: http.StatusOK,
-			expectError:    false,
+			expectedStatus: http.StatusInternalServerError,
+			expectError:    true,
 		},
 		{
 			name:          "search fails - service disabled",
@@ -107,7 +114,11 @@ func TestHandleRunSearch(t *testing.T) {
 			defer e.Cleanup(t)
 
 			// Override the search service for this test
-			e.api.searchService = test.searchService
+			if test.setupMock != nil {
+				e.api.searchService = test.setupMock(t)
+			} else {
+				e.api.searchService = test.searchService
+			}
 
 			// Setup a test bot
 			e.setupTestBot(llm.BotConfig{

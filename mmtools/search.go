@@ -11,6 +11,7 @@ import (
 
 	"github.com/mattermost/mattermost-plugin-ai/embeddings"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
+	"github.com/mattermost/mattermost-plugin-ai/search"
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
@@ -39,7 +40,7 @@ func (p *MMToolProvider) toolSearchServer(llmContext *llm.Context, argsGetter ll
 	}
 
 	// Check if search service is available and enabled
-	if p.search == nil || !p.search.Enabled() {
+	if requreSearchErr := search.RequireSearch(p.search); requreSearchErr != nil {
 		return "search functionality is not configured", errors.New("search is not configured")
 	}
 
