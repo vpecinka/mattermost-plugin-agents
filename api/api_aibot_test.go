@@ -4,7 +4,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mattermost/mattermost-plugin-ai/embeddings"
+	"github.com/mattermost/mattermost-plugin-ai/embeddings/mocks"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 	"github.com/mattermost/mattermost-plugin-ai/search"
 	"github.com/mattermost/mattermost/server/public/model"
@@ -20,25 +19,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-// mockEmbeddingSearch is a mock implementation of embeddings.EmbeddingSearch for testing
-type mockEmbeddingSearch struct{}
-
-func (m *mockEmbeddingSearch) Store(ctx context.Context, docs []embeddings.PostDocument) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearch) Search(ctx context.Context, query string, opts embeddings.SearchOptions) ([]embeddings.SearchResult, error) {
-	return nil, nil
-}
-
-func (m *mockEmbeddingSearch) Delete(ctx context.Context, postIDs []string) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearch) Clear(ctx context.Context) error {
-	return nil
-}
 
 func TestHandleGetAIBots(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
@@ -53,7 +33,7 @@ func TestHandleGetAIBots(t *testing.T) {
 	}{
 		{
 			name:                  "search enabled - non-nil service with non-nil embedding search",
-			searchService:         search.New(&mockEmbeddingSearch{}, nil, nil, nil, nil),
+			searchService:         search.New(mocks.NewMockEmbeddingSearch(t), nil, nil, nil, nil),
 			expectedSearchEnabled: true,
 			expectedStatus:        http.StatusOK,
 			envSetup: func(e *TestEnvironment) {

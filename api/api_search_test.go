@@ -5,7 +5,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,32 +14,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mattermost/mattermost-plugin-ai/embeddings"
+	"github.com/mattermost/mattermost-plugin-ai/embeddings/mocks"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
-	"github.com/mattermost/mattermost-plugin-ai/mmapi/mocks"
+	mmapimocks "github.com/mattermost/mattermost-plugin-ai/mmapi/mocks"
 	"github.com/mattermost/mattermost-plugin-ai/search"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-// mockEmbeddingSearch is a mock implementation for testing
-type mockEmbeddingSearchAPI struct{}
-
-func (m *mockEmbeddingSearchAPI) Store(ctx context.Context, docs []embeddings.PostDocument) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearchAPI) Search(ctx context.Context, query string, opts embeddings.SearchOptions) ([]embeddings.SearchResult, error) {
-	return nil, nil
-}
-
-func (m *mockEmbeddingSearchAPI) Delete(ctx context.Context, postIDs []string) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearchAPI) Clear(ctx context.Context) error {
-	return nil
-}
 
 func TestHandleRunSearch(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
@@ -57,9 +38,9 @@ func TestHandleRunSearch(t *testing.T) {
 		{
 			name: "search fails - DM error",
 			setupMock: func(t *testing.T) *search.Search {
-				mockClient := mocks.NewMockClient(t)
+				mockClient := mmapimocks.NewMockClient(t)
 				mockClient.On("DM", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("DM failed"))
-				return search.New(&mockEmbeddingSearchAPI{}, mockClient, nil, nil, nil)
+				return search.New(mocks.NewMockEmbeddingSearch(t), mockClient, nil, nil, nil)
 			},
 			requestBody: SearchRequest{
 				Query:      "test query",
@@ -96,7 +77,7 @@ func TestHandleRunSearch(t *testing.T) {
 		},
 		{
 			name:          "search fails - empty query",
-			searchService: search.New(&mockEmbeddingSearchAPI{}, nil, nil, nil, nil),
+			searchService: search.New(mocks.NewMockEmbeddingSearch(t), nil, nil, nil, nil),
 			requestBody: SearchRequest{
 				Query:      "",
 				TeamID:     "team123",
@@ -155,14 +136,19 @@ func TestHandleSearchQuery(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		setupMock      func(t *testing.T) *search.Search
 		searchService  *search.Search
 		requestBody    SearchRequest
 		expectedStatus int
 		expectError    bool
 	}{
 		{
-			name:          "search query succeeds - service enabled",
-			searchService: search.New(&mockEmbeddingSearchAPI{}, nil, nil, nil, nil),
+			name: "search query succeeds - service enabled",
+			setupMock: func(t *testing.T) *search.Search {
+				mockEmbedding := mocks.NewMockEmbeddingSearch(t)
+				mockEmbedding.On("Search", mock.Anything, "test query", mock.Anything).Return([]embeddings.SearchResult{}, nil)
+				return search.New(mockEmbedding, nil, nil, nil, nil)
+			},
 			requestBody: SearchRequest{
 				Query:      "test query",
 				TeamID:     "team123",
@@ -204,7 +190,11 @@ func TestHandleSearchQuery(t *testing.T) {
 			defer e.Cleanup(t)
 
 			// Override the search service for this test
-			e.api.searchService = test.searchService
+			if test.setupMock != nil {
+				e.api.searchService = test.setupMock(t)
+			} else {
+				e.api.searchService = test.searchService
+			}
 
 			// Setup a test bot
 			e.setupTestBot(llm.BotConfig{

@@ -4,37 +4,19 @@
 package mmtools
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/mattermost/mattermost-plugin-ai/bots"
 	"github.com/mattermost/mattermost-plugin-ai/embeddings"
+	"github.com/mattermost/mattermost-plugin-ai/embeddings/mocks"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 	"github.com/mattermost/mattermost-plugin-ai/search"
 	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-// mockEmbeddingSearch is a mock implementation for testing
-type mockEmbeddingSearch struct{}
-
-func (m *mockEmbeddingSearch) Store(ctx context.Context, docs []embeddings.PostDocument) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearch) Search(ctx context.Context, query string, opts embeddings.SearchOptions) ([]embeddings.SearchResult, error) {
-	return nil, nil
-}
-
-func (m *mockEmbeddingSearch) Delete(ctx context.Context, postIDs []string) error {
-	return nil
-}
-
-func (m *mockEmbeddingSearch) Clear(ctx context.Context) error {
-	return nil
-}
 
 func TestMMToolProvider_GetTools(t *testing.T) {
 	tests := []struct {
@@ -45,7 +27,7 @@ func TestMMToolProvider_GetTools(t *testing.T) {
 	}{
 		{
 			name:                      "search tool available - search enabled in DM",
-			searchService:             search.New(&mockEmbeddingSearch{}, nil, nil, nil, nil),
+			searchService:             search.New(mocks.NewMockEmbeddingSearch(t), nil, nil, nil, nil),
 			isDM:                      true,
 			expectedSearchToolPresent: true,
 		},
@@ -63,7 +45,7 @@ func TestMMToolProvider_GetTools(t *testing.T) {
 		},
 		{
 			name:                      "search tool not available - not in DM (channel context)",
-			searchService:             search.New(&mockEmbeddingSearch{}, nil, nil, nil, nil),
+			searchService:             search.New(mocks.NewMockEmbeddingSearch(t), nil, nil, nil, nil),
 			isDM:                      false,
 			expectedSearchToolPresent: false,
 		},
@@ -104,11 +86,15 @@ func TestMMToolProvider_toolSearchServer(t *testing.T) {
 		expectedMsg   string
 	}{
 		{
-			name:          "search succeeds - service enabled",
-			searchService: search.New(&mockEmbeddingSearch{}, nil, nil, nil, nil),
-			searchTerm:    "test search term",
-			expectError:   false,
-			expectedMsg:   "No relevant messages found.", // mock returns empty results
+			name: "search succeeds - service enabled",
+			searchService: func() *search.Search {
+				mockEmbedding := mocks.NewMockEmbeddingSearch(t)
+				mockEmbedding.On("Search", mock.Anything, "test search term", mock.Anything).Return([]embeddings.SearchResult{}, nil)
+				return search.New(mockEmbedding, nil, nil, nil, nil)
+			}(),
+			searchTerm:  "test search term",
+			expectError: false,
+			expectedMsg: "No relevant messages found.", // mock returns empty results
 		},
 		{
 			name:          "search fails - service disabled",
@@ -125,11 +111,14 @@ func TestMMToolProvider_toolSearchServer(t *testing.T) {
 			expectedMsg:   "search functionality is not configured",
 		},
 		{
-			name:          "search fails - term too short",
-			searchService: search.New(&mockEmbeddingSearch{}, nil, nil, nil, nil),
-			searchTerm:    "hi",
-			expectError:   true,
-			expectedMsg:   "search term too short",
+			name: "search fails - term too short",
+			searchService: func() *search.Search {
+				mockEmbedding := mocks.NewMockEmbeddingSearch(t)
+				return search.New(mockEmbedding, nil, nil, nil, nil)
+			}(),
+			searchTerm:  "hi",
+			expectError: true,
+			expectedMsg: "search term too short",
 		},
 	}
 
