@@ -36,7 +36,7 @@ func TestHandleRunSearch(t *testing.T) {
 		expectError    bool
 	}{
 		{
-			name: "search fails - DM error",
+			name: "search fails - DM error, service enabled",
 			setupMock: func(t *testing.T) *search.Search {
 				mockClient := mmapimocks.NewMockClient(t)
 				mockClient.On("DM", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("DM failed"))
