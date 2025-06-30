@@ -317,6 +317,10 @@ const ServiceItem = (props: ServiceItemProps) => {
                     }}
                 />
             )}
+            <CustomHeadersItem
+                customHeaders={props.service.customHeaders || {}}
+                onChange={(customHeaders) => props.onChange({...props.service, customHeaders})}
+            />
         </>
     );
 };
