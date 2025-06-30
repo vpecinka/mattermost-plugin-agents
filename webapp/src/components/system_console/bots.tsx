@@ -28,6 +28,7 @@ const defaultNewBot: LLMBotConfig = {
         streamingTimeoutSeconds: 0,
         sendUserId: false,
         outputTokenLimit: 0,
+        customHeaders: {},
     },
     enableVision: false,
     disableTools: false,
