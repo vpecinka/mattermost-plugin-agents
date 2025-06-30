@@ -4,12 +4,13 @@
 package llm
 
 type ServiceConfig struct {
-	Name         string `json:"name"`
-	Type         string `json:"type"`
-	APIKey       string `json:"apiKey"`
-	OrgID        string `json:"orgId"`
-	DefaultModel string `json:"defaultModel"`
-	APIURL       string `json:"apiURL"`
+	Name          string            `json:"name"`
+	Type          string            `json:"type"`
+	APIKey        string            `json:"apiKey"`
+	OrgID         string            `json:"orgId"`
+	DefaultModel  string            `json:"defaultModel"`
+	APIURL        string            `json:"apiURL"`
+	CustomHeaders map[string]string `json:"customHeaders"`
 
 	// Renaming the JSON field to inputTokenLimit would require a migration, leaving as is for now.
 	InputTokenLimit         int  `json:"tokenLimit"`

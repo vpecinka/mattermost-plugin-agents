@@ -15,4 +15,5 @@ export type ServiceData = {
     streamingTimeoutSeconds: number
     sendUserId: boolean
     outputTokenLimit: number
+    customHeaders: {[key: string]: string}
 }
