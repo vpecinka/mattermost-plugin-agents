@@ -291,7 +291,7 @@ func (a *API) handleGetAIBots(c *gin.Context) {
 	}
 
 	// Check if search is enabled
-	searchEnabled := search.IsSearchAvailable(a.searchService)
+	searchEnabled := a.searchService.Enabled()
 
 	c.JSON(http.StatusOK, AIBotsResponse{
 		Bots:          bots,

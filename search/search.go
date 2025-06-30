@@ -75,20 +75,7 @@ func New(
 
 // Enabled returns true if the search service is enabled and functional
 func (s *Search) Enabled() bool {
-	return s.EmbeddingSearch != nil
-}
-
-// IsSearchAvailable checks if the search service is available and enabled
-func IsSearchAvailable(service *Search) bool {
-	return service != nil && service.Enabled()
-}
-
-// RequireSearch returns an error if search is not available
-func RequireSearch(service *Search) error {
-	if !IsSearchAvailable(service) {
-		return fmt.Errorf("search functionality is not configured")
-	}
-	return nil
+	return s != nil && s.EmbeddingSearch != nil
 }
 
 // convertToRAGResults converts embeddings.EmbeddingSearchResult to RAGResult with enriched metadata
@@ -149,7 +136,7 @@ func (s *Search) convertToRAGResults(searchResults []embeddings.SearchResult) []
 
 // RunSearch initiates a search and sends results to a DM
 func (s *Search) RunSearch(ctx context.Context, userID string, bot *bots.Bot, query, teamID, channelID string, maxResults int) (map[string]string, error) {
-	if s.EmbeddingSearch == nil {
+	if !s.Enabled() {
 		return nil, fmt.Errorf("search functionality is not configured")
 	}
 
@@ -286,7 +273,7 @@ func (s *Search) RunSearch(ctx context.Context, userID string, bot *bots.Bot, qu
 
 // SearchQuery performs a search and returns results immediately
 func (s *Search) SearchQuery(ctx context.Context, userID string, bot *bots.Bot, query, teamID, channelID string, maxResults int) (Response, error) {
-	if s.EmbeddingSearch == nil {
+	if !s.Enabled() {
 		return Response{}, fmt.Errorf("search functionality is not configured")
 	}
 
