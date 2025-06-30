@@ -457,6 +457,13 @@ const CustomHeadersItem = (props: CustomHeadersItemProps) => {
     const intl = useIntl();
     const headers = Object.entries(props.customHeaders || {});
     
+    // Generate stable keys for React to prevent focus loss
+    const headersWithStableKeys = headers.map((header, index) => ({
+        key: `header-${index}`,
+        headerKey: header[0],
+        value: header[1]
+    }));
+    
     const addHeader = () => {
         const newHeaders = {...props.customHeaders};
         // Find a unique placeholder name
@@ -498,21 +505,21 @@ const CustomHeadersItem = (props: CustomHeadersItemProps) => {
                 {intl.formatMessage({defaultMessage: 'Custom Headers'})}
             </ItemLabel>
             <CustomHeadersContainer>
-                {headers.map(([key, value]) => (
-                    <HeaderRow key={key}>
+                {headersWithStableKeys.map((item) => (
+                    <HeaderRow key={item.key}>
                         <HeaderInput
                             placeholder="Header name (e.g., X-Organization)"
-                            value={key}
-                            onChange={(e) => updateHeaderKey(key, e.target.value)}
+                            value={item.headerKey}
+                            onChange={(e) => updateHeaderKey(item.headerKey, e.target.value)}
                         />
                         <HeaderInput
                             placeholder="Header value"
-                            value={value}
-                            onChange={(e) => updateHeaderValue(key, e.target.value)}
+                            value={item.value}
+                            onChange={(e) => updateHeaderValue(item.headerKey, e.target.value)}
                         />
                         <RemoveButton
                             type="button"
-                            onClick={() => removeHeader(key)}
+                            onClick={() => removeHeader(item.headerKey)}
                             title="Remove header"
                         >
                             <CloseIcon size={16} />
