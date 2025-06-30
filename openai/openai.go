@@ -23,16 +23,17 @@ import (
 )
 
 type Config struct {
-	APIKey              string        `json:"apiKey"`
-	APIURL              string        `json:"apiURL"`
-	OrgID               string        `json:"orgID"`
-	DefaultModel        string        `json:"defaultModel"`
-	InputTokenLimit     int           `json:"inputTokenLimit"`
-	OutputTokenLimit    int           `json:"outputTokenLimit"`
-	StreamingTimeout    time.Duration `json:"streamingTimeout"`
-	SendUserID          bool          `json:"sendUserID"`
-	EmbeddingModel      string        `json:"embeddingModel"`
-	EmbeddingDimentions int           `json:"embeddingDimensions"`
+	APIKey              string            `json:"apiKey"`
+	APIURL              string            `json:"apiURL"`
+	OrgID               string            `json:"orgID"`
+	DefaultModel        string            `json:"defaultModel"`
+	InputTokenLimit     int               `json:"inputTokenLimit"`
+	OutputTokenLimit    int               `json:"outputTokenLimit"`
+	StreamingTimeout    time.Duration     `json:"streamingTimeout"`
+	SendUserID          bool              `json:"sendUserID"`
+	EmbeddingModel      string            `json:"embeddingModel"`
+	EmbeddingDimentions int               `json:"embeddingDimensions"`
+	CustomHeaders       map[string]string `json:"customHeaders"`
 }
 
 type OpenAI struct {
@@ -107,13 +108,57 @@ func NewCompatibleEmbeddings(config Config, httpClient *http.Client) *OpenAI {
 	)
 }
 
+// customHeadersTransport wraps an http.RoundTripper to add custom headers to every request
+type customHeadersTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (t *customHeadersTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Clone the request to avoid modifying the original
+	newReq := req.Clone(req.Context())
+
+	// Add custom headers
+	for key, value := range t.headers {
+		newReq.Header.Set(key, value)
+	}
+
+	return t.base.RoundTrip(newReq)
+}
+
+// wrapHTTPClientWithCustomHeaders wraps an http.Client to add custom headers to all requests
+func wrapHTTPClientWithCustomHeaders(baseClient *http.Client, customHeaders map[string]string) *http.Client {
+	if len(customHeaders) == 0 {
+		return baseClient
+	}
+
+	transport := baseClient.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+
+	wrappedClient := &http.Client{
+		Transport: &customHeadersTransport{
+			base:    transport,
+			headers: customHeaders,
+		},
+		CheckRedirect: baseClient.CheckRedirect,
+		Jar:           baseClient.Jar,
+		Timeout:       baseClient.Timeout,
+	}
+
+	return wrappedClient
+}
+
 func newOpenAI(
 	config Config,
 	httpClient *http.Client,
 	baseConfigFunc func(apiKey string) openaiClient.ClientConfig,
 ) *OpenAI {
 	clientConfig := baseConfigFunc(config.APIKey)
-	clientConfig.HTTPClient = httpClient
+
+	// Wrap the HTTP client with custom headers if any are provided
+	clientConfig.HTTPClient = wrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)
 
 	return &OpenAI{
 		client: openaiClient.NewClientWithConfig(clientConfig),
