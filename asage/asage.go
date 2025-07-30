@@ -64,19 +64,7 @@ type Provider struct {
 func New(llmService llm.ServiceConfig, httpClient *http.Client) *Provider {
 	// Wrap the HTTP client with custom headers if any are provided
 	wrappedHTTPClient := wrapHTTPClientWithCustomHeaders(httpClient, llmService.CustomHeaders)
-
 	client := NewClient(llmService.APIKey, wrappedHTTPClient, llmService.APIURL)
-	result := strings.SplitN(llmService.APIKey, ":", 2)
-	if len(result) != 2 {
-		return nil
-	}
-
-	if err := client.Login(GetTokenParams{
-		Email:    result[0],
-		Password: result[1],
-	}); err != nil {
-		return nil
-	}
 
 	return &Provider{
 		client:           client,
