@@ -65,7 +65,7 @@ func New(llmService llm.ServiceConfig, httpClient *http.Client) *Provider {
 	// Wrap the HTTP client with custom headers if any are provided
 	wrappedHTTPClient := wrapHTTPClientWithCustomHeaders(httpClient, llmService.CustomHeaders)
 
-	client := NewClient("", wrappedHTTPClient)
+	client := NewClient(llmService.APIKey, wrappedHTTPClient, llmService.APIURL)
 	result := strings.SplitN(llmService.APIKey, ":", 2)
 	if len(result) != 2 {
 		return nil

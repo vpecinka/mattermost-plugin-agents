@@ -115,10 +115,7 @@ func (c *Conversations) ProcessUserRequestWithContext(bot *bots.Bot, postingUser
 		}
 	}
 
-	posts = append(posts, llm.Post{
-		Role:    llm.PostRoleUser,
-		Message: post.Message,
-	})
+	posts = append(posts, c.PostToAIPost(bot, post))
 
 	completionRequest := llm.CompletionRequest{
 		Posts:   posts,
@@ -149,6 +146,14 @@ func (c *Conversations) ProcessUserRequest(bot *bots.Bot, postingUser *model.Use
 		channel,
 		c.contextBuilder.WithLLMContextDefaultTools(bot, mmapi.IsDMWith(bot.GetMMBot().UserId, channel)),
 	)
+
+	// Check for auth errors in the tool store
+	if context.Tools != nil {
+		authErrors := context.Tools.GetAuthErrors()
+		if len(authErrors) > 0 {
+			c.sendOAuthNotifications(bot, postingUser.Id, channel.Id, post.Id, authErrors)
+		}
+	}
 
 	return c.ProcessUserRequestWithContext(bot, postingUser, channel, post, context)
 }
@@ -381,4 +386,33 @@ func (c *Conversations) ThreadToLLMPosts(bot *bots.Bot, threadData *mmapi.Thread
 	}
 
 	return result
+}
+
+// sendOAuthNotifications sends an ephemeral post to notify the user about MCP servers that require authentication
+func (c *Conversations) sendOAuthNotifications(bot *bots.Bot, userID, channelID, rootID string, authErrors []llm.ToolAuthError) {
+	if len(authErrors) == 0 {
+		return
+	}
+
+	// Build the message
+	var message strings.Builder
+	message.WriteString("**Authentication Required**\n\n")
+	message.WriteString("The following MCP servers require authentication:\n\n")
+
+	for _, authErr := range authErrors {
+		message.WriteString(fmt.Sprintf("• **%s**: [Click here to authenticate](%s)\n", authErr.ServerName, authErr.AuthURL))
+	}
+
+	message.WriteString("\nPlease authenticate with the required servers and try again.")
+
+	// Create the ephemeral post
+	post := &model.Post{
+		RootId:    rootID,
+		UserId:    bot.GetMMBot().UserId,
+		ChannelId: channelID,
+		Message:   message.String(),
+	}
+
+	// Send the ephemeral post
+	c.mmClient.SendEphemeralPost(userID, post)
 }
