@@ -52,6 +52,7 @@ type BotConfig struct {
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
 	DisplayName        string `json:"displayName"`
+	Language           string `json:"language"`
 	CustomInstructions string `json:"customInstructions"`
 	ServiceID          string `json:"serviceID"`
 
