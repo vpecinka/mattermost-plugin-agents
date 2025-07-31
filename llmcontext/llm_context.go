@@ -175,6 +175,11 @@ func (b *Builder) WithLLMContextBot(bot *bots.Bot) llm.ContextOption {
 		c.BotName = bot.GetConfig().DisplayName
 		c.BotUsername = bot.GetConfig().Name
 		c.BotModel = bot.GetConfig().Service.DefaultModel
+		// Use "en" as default if no language is configured
+		c.BotLanguage = bot.GetConfig().Language
+		if c.BotLanguage == "" {
+			c.BotLanguage = "en"
+		}
 		c.CustomInstructions = bot.GetConfig().CustomInstructions
 	}
 }

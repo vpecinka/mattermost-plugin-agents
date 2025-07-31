@@ -15,7 +15,8 @@ import (
 )
 
 func main() {
-	promptsDir := "."
+	// Use the en directory as the reference for prompt variables
+	promptsDir := "en"
 	entries, err := os.ReadDir(promptsDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading prompts directory: %v\n", err)
