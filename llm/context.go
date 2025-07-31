@@ -39,6 +39,7 @@ type Context struct {
 	BotUsername        string
 	BotUserID          string
 	BotModel           string
+	BotLanguage        string // Language code for prompts (e.g., "en", "cz")
 	CustomInstructions string
 
 	Tools             *ToolStore

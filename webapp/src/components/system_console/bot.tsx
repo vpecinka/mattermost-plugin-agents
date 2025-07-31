@@ -38,6 +38,7 @@ export type LLMBotConfig = {
     id: string
     name: string
     displayName: string
+    language: string
     serviceID: string
     model: string
     customInstructions: string
@@ -242,6 +243,15 @@ const Bot = (props: Props) => {
                             botusername={props.bot.name}
                             changedAvatar={props.changedAvatar}
                         />
+                        <SelectionItem
+                            label={intl.formatMessage({defaultMessage: 'Language'})}
+                            value={props.bot.language || 'en'}
+                            onChange={(e) => props.onChange({...props.bot, language: e.target.value})}
+                            helptext={intl.formatMessage({defaultMessage: 'Language for the AI bot prompts and system instructions'})}
+                        >
+                            <SelectionItemOption value='en'>{'English'}</SelectionItemOption>
+                            <SelectionItemOption value='cz'>{'Česky (Czech)'}</SelectionItemOption>
+                        </SelectionItem>
                         <SelectionItem
                             label={intl.formatMessage({defaultMessage: 'AI Service'})}
                             value={props.bot.serviceID}
