@@ -18,6 +18,7 @@ const defaultNewBot: LLMBotConfig = {
     id: '',
     name: '',
     displayName: '',
+    language: 'en',
     serviceID: '',
     model: '',
     customInstructions: '',
