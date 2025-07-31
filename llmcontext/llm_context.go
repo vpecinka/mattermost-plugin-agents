@@ -203,6 +203,11 @@ func (b *Builder) WithLLMContextBot(bot *bots.Bot) llm.ContextOption {
 	return func(c *llm.Context) {
 		c.BotName = bot.GetConfig().DisplayName
 		c.BotUsername = bot.GetConfig().Name
+		// Use "en" as default if no language is configured
+		c.BotLanguage = bot.GetConfig().Language
+		if c.BotLanguage == "" {
+			c.BotLanguage = "en"
+		}
 		c.CustomInstructions = bot.GetConfig().CustomInstructions
 		// Set the bot user ID for AI-generated content tracking
 		if mmbot := bot.GetMMBot(); mmbot != nil {
