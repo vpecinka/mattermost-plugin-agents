@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/mattermost/mattermost-plugin-ai/httpexternal"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 )
 
@@ -20,7 +21,9 @@ type Provider struct {
 }
 
 func New(llmService llm.ServiceConfig, httpClient *http.Client) *Provider {
-	client := NewClient(llmService.APIKey, httpClient, llmService.APIURL)
+	// Wrap the HTTP client with custom headers if any are provided
+	wrappedHTTPClient := httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, llmService.CustomHeaders)
+	client := NewClient(llmService.APIKey, wrappedHTTPClient, llmService.APIURL)
 
 	return &Provider{
 		client:           client,
