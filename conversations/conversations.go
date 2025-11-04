@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/mattermost/mattermost-plugin-ai/bots"
-	"github.com/mattermost/mattermost-plugin-ai/enterprise"
 	"github.com/mattermost/mattermost-plugin-ai/format"
 	"github.com/mattermost/mattermost-plugin-ai/i18n"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
@@ -21,6 +20,7 @@ import (
 	"github.com/mattermost/mattermost-plugin-ai/prompts"
 	"github.com/mattermost/mattermost-plugin-ai/streaming"
 	"github.com/mattermost/mattermost-plugin-ai/subtitles"
+	"github.com/mattermost/mattermost-plugin-ai/szn_custom/enterprise"
 	"github.com/mattermost/mattermost-plugin-ai/threads"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
