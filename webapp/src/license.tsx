@@ -81,9 +81,13 @@ export const isProfessionalLicensedOrDevelopment = (state: GlobalState): boolean
 };
 
 export function useIsMultiLLMLicensed() {
-    return useSelector(isEnterpriseLicensedOrDevelopment);
+    // Always return true to allow unlimited AI agents in Team Edition
+    // This corresponds to the dummylicensing.OpenSourceChecker on the backend
+    return true;
 }
 
 export function useIsBasicsLicensed() {
-    return useSelector(isEnterpriseLicensedOrDevelopment);
+    // Always return true to allow all basic AI features in Team Edition
+    // This corresponds to the dummylicensing.OpenSourceChecker on the backend
+    return true;
 }

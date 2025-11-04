@@ -11,9 +11,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/mattermost/mattermost-plugin-ai/chunking"
 	"github.com/mattermost/mattermost-plugin-ai/embeddings"
-	"github.com/mattermost/mattermost-plugin-ai/enterprise"
 	"github.com/mattermost/mattermost-plugin-ai/openai"
 	"github.com/mattermost/mattermost-plugin-ai/postgres"
+	"github.com/mattermost/mattermost-plugin-ai/szn_custom/enterprise"
 )
 
 // newVectorStore creates a new vector store based on the provided configuration
