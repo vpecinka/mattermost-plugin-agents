@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/google/jsonschema-go/jsonschema"
 
+	"github.com/mattermost/mattermost-plugin-ai/httpexternal"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 )
 
@@ -45,9 +46,12 @@ type Anthropic struct {
 }
 
 func New(llmService llm.ServiceConfig, botConfig llm.BotConfig, httpClient *http.Client) *Anthropic {
+	// Wrap the HTTP client with custom headers if any are provided
+	wrappedHTTPClient := httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, llmService.CustomHeaders)
+
 	client := anthropicSDK.NewClient(
 		option.WithAPIKey(llmService.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(wrappedHTTPClient),
 	)
 
 	return &Anthropic{
