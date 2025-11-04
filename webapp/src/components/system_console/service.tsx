@@ -5,7 +5,7 @@ import React, {useState, useEffect} from 'react';
 import styled from 'styled-components';
 import {useIntl} from 'react-intl';
 
-import {TrashCanOutlineIcon, ChevronDownIcon, ChevronUpIcon} from '@mattermost/compass-icons/components';
+import {TrashCanOutlineIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon} from '@mattermost/compass-icons/components';
 
 import IconAI from '../assets/icon_ai';
 
@@ -31,6 +31,7 @@ export type LLMService = {
     region: string
     awsAccessKeyID: string
     awsSecretAccessKey: string
+    customHeaders?: Record<string, string>
 }
 
 const mapServiceTypeToDisplayName = new Map<string, string>([
@@ -52,6 +53,72 @@ type ModelInfo = {
     id: string
     displayName: string
 }
+
+type CustomHeadersSectionProps = {
+    headers: Record<string, string>
+    onChange: (headers: Record<string, string>) => void
+}
+
+const CustomHeadersSection = (props: CustomHeadersSectionProps) => {
+    const intl = useIntl();
+    const headerEntries = Object.entries(props.headers);
+
+    const addHeader = () => {
+        props.onChange({...props.headers, '': ''});
+    };
+
+    const updateHeaderKey = (oldKey: string, newKey: string) => {
+        const newHeaders = {...props.headers};
+        const value = newHeaders[oldKey];
+        delete newHeaders[oldKey];
+        newHeaders[newKey] = value;
+        props.onChange(newHeaders);
+    };
+
+    const updateHeaderValue = (key: string, value: string) => {
+        props.onChange({...props.headers, [key]: value});
+    };
+
+    const deleteHeader = (key: string) => {
+        const newHeaders = {...props.headers};
+        delete newHeaders[key];
+        props.onChange(newHeaders);
+    };
+
+    return (
+        <CustomHeadersContainer>
+            <HeaderLabel>
+                {intl.formatMessage({defaultMessage: 'Custom HTTP Headers'})}
+                <HelpText>
+                    {intl.formatMessage({defaultMessage: 'Additional headers to send with each request to the LLM service (e.g., X-Private, X-Custom-Auth)'})}
+                </HelpText>
+            </HeaderLabel>
+            {headerEntries.map(([key, value], index) => (
+                <HeaderRow key={index}>
+                    <HeaderInput
+                        placeholder={intl.formatMessage({defaultMessage: 'Header name'})}
+                        value={key}
+                        onChange={(e) => updateHeaderKey(key, e.target.value)}
+                    />
+                    <HeaderInput
+                        placeholder={intl.formatMessage({defaultMessage: 'Header value'})}
+                        value={value}
+                        onChange={(e) => updateHeaderValue(key, e.target.value)}
+                    />
+                    <ButtonIcon
+                        onClick={() => deleteHeader(key)}
+                    >
+                        <SmallTrashIcon/>
+                    </ButtonIcon>
+                </HeaderRow>
+            ))}
+            <AddHeaderButton onClick={addHeader}>
+                <PlusIcon/>
+                {intl.formatMessage({defaultMessage: 'Add header'})}
+            </AddHeaderButton>
+        </CustomHeadersContainer>
+    );
+};
 
 type ServiceFieldsProps = {
     service: LLMService
@@ -267,6 +334,10 @@ const ServiceFields = (props: ServiceFieldsProps) => {
                     }}
                 />
             )}
+            <CustomHeadersSection
+                headers={props.service.customHeaders || {}}
+                onChange={(customHeaders) => props.onChange({...props.service, customHeaders})}
+            />
         </>
     );
 };
@@ -381,6 +452,75 @@ const HeaderContainer = styled.div`
 	gap: 16px;
 	padding: 12px 16px 12px 20px;
 	cursor: pointer;
+`;
+
+const CustomHeadersContainer = styled.div`
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 16px;
+`;
+
+const HeaderLabel = styled.div`
+	font-size: 14px;
+	font-weight: 600;
+	margin-bottom: 8px;
+`;
+
+const HelpText = styled.div`
+	font-size: 12px;
+	font-weight: 400;
+	color: rgba(var(--center-channel-color-rgb), 0.64);
+	margin-top: 4px;
+`;
+
+const HeaderRow = styled.div`
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+	align-items: center;
+`;
+
+const HeaderInput = styled.input`
+	flex: 1;
+	padding: 8px 12px;
+	border: 1px solid rgba(var(--center-channel-color-rgb), 0.16);
+	border-radius: 4px;
+	font-size: 14px;
+	
+	&:focus {
+		outline: none;
+		border-color: var(--button-bg);
+	}
+`;
+
+const SmallTrashIcon = styled(TrashCanOutlineIcon)`
+	width: 16px;
+	height: 16px;
+	color: #D24B4E;
+`;
+
+const AddHeaderButton = styled.button`
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 12px;
+	background: transparent;
+	border: 1px dashed rgba(var(--center-channel-color-rgb), 0.32);
+	border-radius: 4px;
+	color: var(--button-bg);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	
+	&:hover {
+		background: rgba(var(--button-bg-rgb), 0.08);
+	}
+	
+	svg {
+		width: 18px;
+		height: 18px;
+	}
 `;
 
 export default Service;
