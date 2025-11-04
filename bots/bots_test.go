@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mattermost/mattermost-plugin-ai/enterprise"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
@@ -398,6 +397,18 @@ func TestServiceConfigsEqual(t *testing.T) {
 			require.Equal(t, tc.expected, result)
 		})
 	}
+
+// mockLicenseChecker is a test implementation of the license checker
+type mockLicenseChecker struct {
+	isMultiLLMLicensed bool
+}
+
+func (m *mockLicenseChecker) IsMultiLLMLicensed() bool {
+	return m.isMultiLLMLicensed
+}
+
+func (m *mockLicenseChecker) IsBasicsLicensed() bool {
+	return true
 }
 
 func TestEnsureBots(t *testing.T) {
@@ -517,19 +528,9 @@ func TestEnsureBots(t *testing.T) {
 			mockAPI := &plugintest.API{}
 			client := pluginapi.NewClient(mockAPI, nil)
 
-			// Mock the license check
-			if tc.isMultiLLMLicensed {
-				config := &model.Config{}
-				license := &model.License{}
-				license.Features = &model.Features{}
-				license.Features.SetDefaults()
-				license.SkuShortName = model.LicenseShortSkuEnterprise
-				mockAPI.On("GetConfig").Return(config).Maybe()
-				mockAPI.On("GetLicense").Return(license).Maybe()
-			} else {
-				config := &model.Config{}
-				mockAPI.On("GetConfig").Return(config).Maybe()
-				mockAPI.On("GetLicense").Return((*model.License)(nil)).Maybe()
+			// Create license checker with appropriate setting
+			licenseChecker := &mockLicenseChecker{
+				isMultiLLMLicensed: tc.isMultiLLMLicensed,
 			}
 
 			// Mock bot operations
@@ -551,7 +552,6 @@ func TestEnsureBots(t *testing.T) {
 			// Mock logging
 			mockAPI.On("LogError", mock.Anything).Return(nil).Maybe()
 
-			licenseChecker := enterprise.NewLicenseChecker(client)
 			cfg := &mockConfig{
 				bots:     tc.cfgBots,
 				services: tc.cfgServices,
