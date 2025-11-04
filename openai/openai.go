@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattermost/mattermost-plugin-ai/httpexternal"
 	"github.com/mattermost/mattermost-plugin-ai/llm"
 	"github.com/mattermost/mattermost-plugin-ai/subtitles"
 	"github.com/openai/openai-go/v2"
@@ -45,6 +46,8 @@ type Config struct {
 	ReasoningEffort      string        `json:"reasoningEffort"`
 	DisableStreamOptions bool          `json:"disableStreamOptions"` // For OpenAI-compatible APIs that don't support stream_options
 	UseMaxTokens         bool          `json:"useMaxTokens"`         // Use max_tokens instead of max_completion_tokens for compatible APIs
+	// CustomHeaders allows specifying additional HTTP headers
+	CustomHeaders map[string]string `json:"customHeaders"`
 }
 
 type OpenAI struct {
@@ -63,7 +66,7 @@ func NewAzure(config Config, httpClient *http.Client) *OpenAI {
 	opts := []option.RequestOption{
 		azure.WithEndpoint(strings.TrimSuffix(config.APIURL, "/"), "2025-04-01-preview"),
 		azure.WithAPIKey(config.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)),
 	}
 
 	client := openai.NewClient(opts...)
@@ -77,7 +80,7 @@ func NewAzure(config Config, httpClient *http.Client) *OpenAI {
 func NewCompatible(config Config, httpClient *http.Client) *OpenAI {
 	opts := []option.RequestOption{
 		option.WithAPIKey(config.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)),
 		option.WithBaseURL(strings.TrimSuffix(config.APIURL, "/")),
 	}
 
@@ -92,7 +95,7 @@ func NewCompatible(config Config, httpClient *http.Client) *OpenAI {
 func New(config Config, httpClient *http.Client) *OpenAI {
 	opts := []option.RequestOption{
 		option.WithAPIKey(config.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)),
 	}
 
 	if config.OrgID != "" {
@@ -116,7 +119,7 @@ func NewEmbeddings(config Config, httpClient *http.Client) *OpenAI {
 
 	opts := []option.RequestOption{
 		option.WithAPIKey(config.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)),
 	}
 
 	client := openai.NewClient(opts...)
@@ -136,7 +139,7 @@ func NewCompatibleEmbeddings(config Config, httpClient *http.Client) *OpenAI {
 
 	opts := []option.RequestOption{
 		option.WithAPIKey(config.APIKey),
-		option.WithHTTPClient(httpClient),
+		option.WithHTTPClient(httpexternal.WrapHTTPClientWithCustomHeaders(httpClient, config.CustomHeaders)),
 		option.WithBaseURL(strings.TrimSuffix(config.APIURL, "/")),
 	}
 
