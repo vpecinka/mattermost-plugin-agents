@@ -376,7 +376,6 @@ const Bot = (props: Props) => {
                             teamIDs={props.bot.teamIDs ?? []}
                             onChangeIDs={(userIds: string[], teamIds: string[]) => props.onChange({...props.bot, userIDs: userIds, teamIDs: teamIds})}
                         />
-
                     </ItemList>
                 </ItemListContainer>
             )}
