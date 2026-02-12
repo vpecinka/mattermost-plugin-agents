@@ -14,7 +14,6 @@ import {ButtonIcon} from '../assets/buttons';
 import {fetchModels} from '../../client';
 
 import {BooleanItem, ItemList, SelectionItem, SelectionItemOption, TextItem, ComboboxItem} from './item';
-import {CustomHeadersItem} from './custom_headers';
 
 export type LLMService = {
     id: string
